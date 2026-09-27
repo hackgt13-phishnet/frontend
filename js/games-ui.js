@@ -350,6 +350,8 @@
     if (invite.done) return ['Game over · see the results', 'View'];
     if (invite.myTurn == null) return [invite.mine ? '3 rounds, made for your group' : `${sender} sent a game`, 'Play'];
     if (invite.myTurn) return [invite.mine ? 'Ready to play' : `${sender} sent a game · tap to play`, 'Play'];
+    // Everyone's answered the open round: the game master opens the next one once the chat goes quiet.
+    if (!invite.waitingCount) return ['Next round opens when the chat goes quiet', 'View'];
     return [`Waiting on ${invite.waitingCount} ${invite.waitingCount === 1 ? 'player' : 'players'}`, 'Open'];
   }
 
@@ -1337,6 +1339,11 @@
       // Opening a chat is how a phone joins its game.
       if (!(await ensureReady())) return;
       if (window.DMChat?.getActiveThreadId() !== threadId) return;
+      // The seeded history shows this phone's own lines on the sent side.
+      if (window.DMChat && window.DMChat.me !== ready.profile?.display_name) {
+        window.DMChat.me = ready.profile?.display_name;
+        window.DMChat.refresh();
+      }
       await joinThread(threadId);
       await loadChat(threadId);
       await syncInvites(threadId);
