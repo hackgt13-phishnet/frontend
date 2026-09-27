@@ -270,71 +270,11 @@
   const backBtn = document.getElementById('dm-back');
 
   let activeId = null;
-  let activeRoomId = null;
-  let stopMessageWatch = null;
-
-  function timelineMessage(row) {
-    const payload = row.payload || row.data || row.metadata || {};
-    const body = row.body || payload.body || payload.text;
-    if (!body || row.event_type === 'game_invite' || payload.event_type === 'game_invite') return null;
-    const profileId = row.profile_id || payload.profile_id;
-    const ownProfileId = window.GamesAPI?.savedProfile?.()?.id;
-    return {
-      id: row.id,
-      type: profileId && profileId === ownProfileId ? 'out' : 'in',
-      text: body,
-      avatar: profileId !== ownProfileId,
-      name: row.display_name || payload.display_name,
-    };
-  }
-
-  function addRemoteMessage(row) {
-    const message = timelineMessage(row);
-    if (!message || !activeId) return;
-    const data = threads[activeId];
-    if (message.id && data.messages.some((item) => item.id === message.id)) return;
-    const pending = data.messages.find(
-      (item) => !item.id && item.type === 'out' && item.text === message.text
-    );
-    if (pending) {
-      pending.id = message.id;
-      return;
-    }
-    data.messages.push(message);
-    renderMessages(data.messages);
-    messagesEl.scrollTop = messagesEl.scrollHeight;
-  }
-
-  async function syncThreadMessages(id) {
-    const api = window.GamesAPI;
-    if (!api) return;
-    try {
-      const room = await api.threadRoom(id, threads[id].name);
-      if (activeId !== id) return;
-      activeRoomId = room.id;
-      stopMessageWatch = api.watchThreadMessages(room.id, addRemoteMessage);
-      const timeline = await api.timeline(room.id);
-      const rows = timeline?.events || timeline?.timeline || timeline?.items || timeline || [];
-      rows.map(timelineMessage).filter(Boolean).forEach((message) => {
-        if (!message.id || !threads[id].messages.some((item) => item.id === message.id)) {
-          threads[id].messages.push(message);
-        }
-      });
-      renderMessages(threads[id].messages);
-      messagesEl.scrollTop = messagesEl.scrollHeight;
-    } catch (error) {
-      console.warn('Could not sync chat messages:', error);
-    }
-  }
-
   function openThread(id) {
     const data = threads[id];
     if (!data) return;
 
     activeId = id;
-    stopMessageWatch?.();
-    stopMessageWatch = null;
-    activeRoomId = null;
     if (emptyEl) emptyEl.classList.add('hidden');
     chatEl.classList.remove('hidden');
     phoneShell?.classList.add('chat-open');
@@ -362,7 +302,6 @@
     document.dispatchEvent(
       new CustomEvent('dm:thread-open', { detail: { threadId: id, thread: data } })
     );
-    syncThreadMessages(id);
   }
 
   function closeThread() {
@@ -374,9 +313,6 @@
     document.dispatchEvent(
       new CustomEvent('dm:thread-close', { detail: { threadId: prev } })
     );
-    stopMessageWatch?.();
-    stopMessageWatch = null;
-    activeRoomId = null;
   }
 
   function renderMessages(list) {
@@ -526,24 +462,13 @@
     });
   }
 
-  async function appendOutgoing(text) {
+  function appendOutgoing(text) {
     if (!activeId) return;
     const data = threads[activeId];
     clearReceipts(data);
-    const localMessage = { type: 'out', text, seen: true, receipt: 'Delivered' };
-    data.messages.push(localMessage);
+    data.messages.push({ type: 'out', text, seen: true, receipt: 'Delivered' });
     renderMessages(data.messages);
     messagesEl.scrollTop = messagesEl.scrollHeight;
-
-    const api = window.GamesAPI;
-    if (!api || !activeRoomId) return;
-    try {
-      await api.sendMessage(activeRoomId, text);
-    } catch (error) {
-      data.messages = data.messages.filter((message) => message !== localMessage);
-      renderMessages(data.messages);
-      console.warn('Could not send chat message:', error);
-    }
 
     const thread = document.querySelector(`.dm-thread[data-thread="${activeId}"]`);
     if (thread) {
@@ -576,11 +501,13 @@
     backBtn.addEventListener('click', closeThread);
   }
 
-  composer.addEventListener('submit', async (e) => {
+  composer.addEventListener('submit', (e) => {
     e.preventDefault();
     const text = input.value.trim();
     if (!text || !activeId) return;
-    await appendOutgoing(text);
+    // When the chat has a live room, the games layer posts it and it comes back as a timeline event
+    // (one feed for messages, game master lines and results: see chatEvent in games-ui.js).
+    if (!window.DMChat.sendHook?.(text)) appendOutgoing(text);
     input.value = '';
     syncComposer();
   });
