@@ -30,7 +30,7 @@
   const els = {
     sheet: document.getElementById('g-sheet-backdrop'),
     sheetBody: document.getElementById('g-sheet-body'),
-    gamesBtn: document.getElementById('composer-games'),
+    plusBtn: document.getElementById('composer-plus'),
     tray: document.getElementById('g-tray'),
     trayGames: document.getElementById('g-tray-games'),
     play: document.getElementById('g-play'),
@@ -156,7 +156,8 @@
     if (!els.tray) return;
     const open = force ?? els.tray.classList.contains('hidden');
     els.tray.classList.toggle('hidden', !open);
-    els.gamesBtn?.classList.toggle('active', open);
+    els.plusBtn?.classList.toggle('active', open);
+    els.plusBtn?.setAttribute('aria-expanded', String(open));
     if (open && els.messages) els.messages.scrollTop = els.messages.scrollHeight;
   }
 
@@ -1174,7 +1175,7 @@
 
   /* ---------- wiring ---------- */
 
-  els.gamesBtn?.addEventListener('click', () => toggleTray());
+  els.plusBtn?.addEventListener('click', () => toggleTray());
   els.trayGames?.addEventListener('click', () => {
     closeTray();
     openChaosSheet();

@@ -39,7 +39,7 @@
   padding: 0;
 }
 
-.composer-icon#composer-games {
+.composer-icon#composer-plus {
   color: #262626;
   display: inline-flex;
   align-items: center;
@@ -47,12 +47,20 @@
   border-radius: 8px;
 }
 
-.composer-icon#composer-games:hover,
-.composer-icon#composer-games.active {
+.composer-icon#composer-plus svg {
+  transition: transform 180ms ease;
+}
+
+.composer-icon#composer-plus:hover,
+.composer-icon#composer-plus.active {
   color: var(--g-blue);
 }
 
-.composer-right.typing #composer-games {
+.composer-icon#composer-plus.active svg {
+  transform: rotate(45deg);
+}
+
+.composer-right.typing #composer-plus {
   display: none;
 }
 
