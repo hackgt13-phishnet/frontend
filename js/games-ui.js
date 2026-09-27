@@ -491,6 +491,8 @@
   const optionId = (opt) => opt.id || opt.profile_id;
   // Opinion rounds have no right answer: players add a one-line why and the AI judges the best one.
   const needsWhy = (r) => r.game_type !== 'who_sent_this';
+  // Open rounds (Hot Take) have no options: each player types their own take and the AI judges.
+  const isOpen = (r) => !(r.options || []).length;
 
   function roundPlayers(r) {
     if (r.player_profile_ids?.length) return r.player_profile_ids;
@@ -509,6 +511,8 @@
     const judged = revealed ? !!reveal.winner_profile_id : needsWhy(r);
     const media = r.media || {};
     const label = GAME_LABELS[r.game_type] || 'Round';
+    const open = isOpen(r);
+    if (open && !revealed && !iSubmitted && !drafts[r.id]) drafts[r.id] = { choice: 'open', why: '' };
     const labelOf = (id) => (r.options || []).find((o) => optionId(o) === id)?.label || '';
     const tally = {};
     for (const res of reveal.results || []) tally[res.choice] = (tally[res.choice] || 0) + 1;
@@ -541,10 +545,10 @@
     const players = roundPlayers(r);
     const lastOne = submitted.length === players.length - 1;
     const whyHtml =
-      !revealed && !iSubmitted && r.phase === 'answering' && needsWhy(r) && draft?.choice
+      !revealed && !iSubmitted && r.phase === 'answering' && needsWhy(r) && drafts[r.id]?.choice
         ? `<div class="g-text-answer g-why">
-            <input class="g-why-input" data-round="${escapeHtml(r.id)}" maxlength="140" placeholder="why? one line, make it good" value="${escapeHtml(draft.why || '')}" ${sending ? 'disabled' : ''}>
-            <button type="button" class="g-btn primary g-why-send" data-round="${escapeHtml(r.id)}" ${sending || !(draft.why || '').trim() ? 'disabled' : ''}>${sending ? (lastOne ? 'Judging…' : 'Sending…') : 'Send'}</button>
+            <input class="g-why-input" data-round="${escapeHtml(r.id)}" maxlength="140" placeholder="${open ? 'your take, one line, make it good' : 'why? one line, make it good'}" value="${escapeHtml(drafts[r.id].why || '')}" ${sending ? 'disabled' : ''}>
+            <button type="button" class="g-btn primary g-why-send" data-round="${escapeHtml(r.id)}" ${sending || !(drafts[r.id].why || '').trim() ? 'disabled' : ''}>${sending ? (lastOne ? 'Judging…' : 'Sending…') : 'Send'}</button>
           </div>`
         : '';
 
@@ -557,7 +561,7 @@
         .map(
           (res) => `
             <div class="g-answer-row ${res.profile_id === winner ? 'winner' : ''}">
-              <strong>${res.profile_id === winner ? '🏆 ' : ''}${escapeHtml(profileName(res.profile_id))} <span class="g-pick">· ${escapeHtml(labelOf(res.choice))}</span></strong>
+              <strong>${res.profile_id === winner ? '🏆 ' : ''}${escapeHtml(profileName(res.profile_id))}${res.choice && labelOf(res.choice) ? ` <span class="g-pick">· ${escapeHtml(labelOf(res.choice))}</span>` : ''}</strong>
               ${res.why ? `<p class="g-why-text">“${escapeHtml(res.why)}”</p>` : ''}
             </div>`
         )
@@ -580,7 +584,7 @@
       const total = r.required_response_count || players.length;
       const who = submitted.map(profileName).join(', ');
       const pending = players.filter((id) => !submitted.includes(id) && id !== room.viewer).map(profileName);
-      const prompt = needsWhy(r) ? (draft?.choice ? 'Now say why' : 'Pick a side') : 'Your move';
+      const prompt = open ? 'Type your take' : needsWhy(r) ? (draft?.choice ? 'Now say why' : 'Pick a side') : 'Your move';
       footer = `<div class="g-wait">${
         iSubmitted
           ? pending.length
@@ -598,7 +602,7 @@
           <h4>${escapeHtml(r.prompt)}</h4>
           ${quoteHtml}
           ${mediaHtml}
-          <div class="g-options">${options}</div>
+          ${options ? `<div class="g-options">${options}</div>` : ''}
           ${whyHtml}
           ${footer}
         </div>

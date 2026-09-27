@@ -26,14 +26,15 @@ Sending a game takes ~10-15s: the backend's AI pipeline (`app/services/rounds.py
 writes 3 rounds for exactly the players in the chat, from their shared chat history ("moments")
 and each player's own interests. If every model call fails it falls back to the fixture rounds.
 
-Chaos picks a random round type each round (all three different when possible).
+Chaos mixes two games (both appear in every game when the material allows):
 
-- **Who Sent This? / Who Posted This?**: +1 if you guess who wrote it. Group-chat messages are only
-  used when their whole thread is playing (Ana, Dev, Kofi, Maya and Sam); smaller groups get a
-  player's public post or story instead.
-- **This or That / Hot Take / Most Likely To** (opinion, no right answer): pick a side and write
-  a one-line why. When the last person answers, the AI judges the most interesting why (~4s),
-  gives it +1 and posts a shout-out. Everyone's pick and why are shown at the reveal.
+- **Who Sent This?**: +1 if you guess who sent it. It's a **text** or a **reel** someone shared in the
+  group chat (only threads whose whole membership is playing), or, in groups with no usable chat,
+  a player's public post or story.
+- **Hot Take** (open, no right answer): an AI-written question about what the players are into.
+  Everyone **types their own take** (one line, no options). When the last person answers, the AI
+  judges the most interesting take (~4s), gives it +1 and posts a shout-out. Everyone's take is
+  shown at the reveal.
 
 The old timed flow (`mode: "live"`, one round at a time, paced by the AI game master) still
 exists for the team's other clients; the game master only runs live sessions.
