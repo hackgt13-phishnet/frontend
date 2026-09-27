@@ -1,0 +1,42 @@
+/* The game master and round results, inside the DM chat itself. */
+
+@keyframes gm-in {
+  from { opacity: 0; transform: translateY(8px) scale(.98); }
+  to { opacity: 1; transform: none; }
+}
+
+.gm-row { align-items: flex-end; }
+.gm-av {
+  flex: none; width: 28px; height: 28px; margin-right: 8px; border-radius: 50%;
+  display: grid; place-items: center; color: #fff; font-size: 13px;
+  background: linear-gradient(135deg, #5ec4ff, #2563eb);
+}
+.dm-bubble.gm-bubble {
+  background: linear-gradient(135deg, rgba(94, 196, 255, .16), rgba(37, 99, 235, .12));
+  border: 1px solid rgba(55, 151, 240, .3);
+  color: inherit;
+  animation: gm-in 360ms cubic-bezier(.2, .8, .2, 1);
+}
+
+.gm-result-row { justify-content: center; }
+.gm-result {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  width: 260px; max-width: 100%; padding: 12px 14px; border-radius: 18px;
+  background: #fff; border: 1px solid rgba(55, 151, 240, .35);
+  box-shadow: 0 4px 14px rgba(55, 151, 240, .12);
+  font: inherit; color: #1b1530; cursor: pointer; text-align: center;
+  animation: gm-in 420ms cubic-bezier(.2, .8, .2, 1);
+  transition: transform 160ms cubic-bezier(.34, 1.56, .64, 1);
+}
+.gm-result:active { transform: scale(.97); }
+.gm-result-label { font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: #3797f0; }
+.gm-result strong { font-size: 15px; }
+.gm-result-sub { font-size: 13px; color: #6f6a80; }
+
+.gm-sys { font-weight: 600; color: #3797f0; }
+
+.g-foot-note { margin: 0 0 10px; text-align: center; font-size: 13px; color: var(--g-muted, #6f6a80); }
+
+@media (prefers-reduced-motion: reduce) {
+  .dm-bubble.gm-bubble, .gm-result { animation: none; }
+}

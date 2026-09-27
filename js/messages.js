@@ -183,13 +183,14 @@
 
   function renderMessages(list) {
     messagesEl.innerHTML = list.map(messageHTML).join('');
-    messagesEl.querySelectorAll('.gp-invite').forEach((btn) => {
+    messagesEl.querySelectorAll('.gp-invite, .gm-result').forEach((btn) => {
       btn.addEventListener('click', () => {
         document.dispatchEvent(
           new CustomEvent('dm:play-game', {
             detail: {
               threadId: activeId,
               roomId: btn.dataset.room,
+              roundId: btn.dataset.round || null,
               isHost: btn.dataset.host === '1',
             },
           })
@@ -238,6 +239,32 @@
         </div>`;
     }
 
+    if (msg.type === 'gm') {
+      return `
+        <div class="dm-row in gm-row">
+          <span class="gm-av" aria-hidden="true">✦</span>
+          <div class="dm-bubble-col">
+            <span class="dm-sender">Game master</span>
+            <div class="dm-bubble in gm-bubble">${escapeHtml(msg.text)}</div>
+          </div>
+        </div>`;
+    }
+
+    if (msg.type === 'gm-result') {
+      return `
+        <div class="dm-row gm-result-row">
+          <button type="button" class="gm-result" data-room="${escapeHtml(msg.roomId || '')}" data-round="${escapeHtml(msg.roundId || '')}">
+            <span class="gm-result-label">${escapeHtml(msg.label)}</span>
+            <strong>${escapeHtml(msg.title)}</strong>
+            ${msg.sub ? `<span class="gm-result-sub">${escapeHtml(msg.sub)}</span>` : ''}
+          </button>
+        </div>`;
+    }
+
+    if (msg.type === 'sys') {
+      return `<div class="dm-time gm-sys">${escapeHtml(msg.text)}</div>`;
+    }
+
     if (msg.type === 'game-invite') {
       const side = msg.from === 'in' ? 'in' : 'out';
       return `
@@ -258,9 +285,9 @@
     const side = msg.type === 'out' ? 'out' : 'in';
     const avatar =
       side === 'in' && msg.avatar
-        ? `<img class="dm-msg-avatar" src="${
-            threads[activeId].avatars[0]
-          }" alt="">`
+        ? `<img class="dm-msg-avatar" src="${escapeHtml(
+            msg.avatarUrl || threads[activeId].avatars[0]
+          )}" alt="">`
         : side === 'in'
           ? `<span class="dm-msg-avatar spacer"></span>`
           : '';
@@ -343,7 +370,8 @@
     e.preventDefault();
     const text = input.value.trim();
     if (!text || !activeId) return;
-    appendOutgoing(text);
+    // When the chat has a live room, the message goes to the backend and comes back as a timeline event.
+    if (!window.DMChat.sendHook?.(text)) appendOutgoing(text);
     input.value = '';
     syncComposer();
   });
@@ -366,6 +394,8 @@
     appendMessage(msg) {
       if (!activeId) return;
       const data = threads[activeId];
+      if (msg.eventId && data.messages.some((m) => m.eventId === msg.eventId)) return;
+      if (msg.type === 'out') clearReceipts(data);
       data.messages.push(msg);
       renderMessages(data.messages);
       messagesEl.scrollTop = messagesEl.scrollHeight;
@@ -374,7 +404,13 @@
         const preview = thread.querySelector('.preview');
         if (preview) {
           preview.textContent =
-            msg.type === 'game-invite' ? `Game: ${msg.title || 'Chaos'}` : preview.textContent;
+            msg.type === 'game-invite'
+              ? `Game: ${msg.title || 'Chaos'}`
+              : msg.type === 'out'
+                ? `You: ${msg.text}`
+                : msg.type === 'in'
+                  ? `${msg.name ? `${msg.name}: ` : ''}${msg.text}`
+                  : preview.textContent;
         }
       }
     },
