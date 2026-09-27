@@ -1,123 +1,259 @@
 /* Instagram DM chat interactions */
 (function () {
+  // The seeded friend group's real chats (Backend seed/group_items.json): the same history the AI uses.
   const threads = {
-    ridham: {
-      name: 'Ridham Ohri',
-      status: 'Active 41m ago',
-      avatars: ['https://i.pravatar.cc/150?img=11'],
-      messages: [
-        { type: 'time', text: '10/16/25, 10:47 PM' },
-        { type: 'in', text: "Bru idek if I'm gonna go atp 😭", avatar: true },
-        { type: 'out', text: 'Ay make tomorrow a first' },
-        { type: 'in', text: 'Lmao no way', reaction: '❤️', avatar: true },
-        { type: 'time', text: 'Yesterday, 9:12 PM' },
-        {
-          type: 'story-reply',
-          label: "Replied to Ridham Ohri's story",
-          story: 'Story unavailable',
-          text: 'At work',
-        },
-        { type: 'in', text: 'Fair fair', avatar: true },
-        { type: 'out', text: 'Call me when you land', seen: true },
+    "roshan-group": {
+      "name": "the group 🍚",
+      "status": "Maya, Dev, Sam, Ana, Kofi",
+      "avatars": [
+        "https://i.pravatar.cc/150?img=47",
+        "https://i.pravatar.cc/150?img=12"
       ],
-    },
-    'roshan-group': {
-      name: 'Roshan Ram and Shrey Desai',
-      status: 'Roshan Ram is active',
-      avatars: [
-        'https://i.pravatar.cc/150?img=20',
-        'https://i.pravatar.cc/150?img=32',
-      ],
-      messages: [
-        { type: 'time', text: 'Today, 11:04 AM' },
+      "messages": [
         {
-          type: 'out-media',
-          media: 'https://images.unsplash.com/photo-1635805737707-575885ab0820?w=600&h=900&fit=crop',
-          caption: 'this edit goes crazy',
+          "type": "time",
+          "text": "Feb 3, 2026"
         },
         {
-          type: 'out-media',
-          media: 'https://images.unsplash.com/photo-1556157382-97eda2d62296?w=600&h=900&fit=crop',
-          seenBy: 'Seen by Roshan Ram',
+          "type": "in",
+          "text": "🎬 this reel is literally me",
+          "avatar": true,
+          "name": "Sam"
         },
-      ],
-    },
-    chris: {
-      name: 'Chris Park',
-      status: 'Active now',
-      avatars: ['https://i.pravatar.cc/150?img=33'],
-      messages: [
-        { type: 'time', text: 'Yesterday, 6:20 PM' },
-        { type: 'in', text: 'You free later?', avatar: true },
-        { type: 'out', text: 'Yeah after 8' },
-        { type: 'in', text: 'Bet', reaction: '😂', avatar: true },
-        { type: 'out', text: 'Pull up to the spot', seen: true },
-      ],
-    },
-    veer: {
-      name: 'Veer Dabbi',
-      status: 'Active 1h ago',
-      avatars: ['https://i.pravatar.cc/150?img=52'],
-      messages: [
-        { type: 'time', text: 'Monday, 4:03 PM' },
-        { type: 'out', text: 'Gym today?' },
-        { type: 'in', text: 'Already here 💪', avatar: true },
         {
-          type: 'out-media',
-          media: 'https://images.unsplash.com/photo-1534438327276-14e5300c3a48?w=600&h=800&fit=crop',
-          seen: true,
+          "type": "time",
+          "text": "Feb 5, 2026"
         },
-      ],
+        {
+          "type": "in",
+          "text": "the group project guy ghosted us again",
+          "avatar": true,
+          "name": "Dev"
+        },
+        {
+          "type": "time",
+          "text": "Feb 6, 2026"
+        },
+        {
+          "type": "in",
+          "text": "my mom just texted 'k' im scared",
+          "avatar": true,
+          "name": "Ana"
+        },
+        {
+          "type": "time",
+          "text": "Feb 14, 2026"
+        },
+        {
+          "type": "in",
+          "text": "kofi said the rice cooker has a name and it's 'mama' i'm crying",
+          "avatar": true,
+          "name": "Ana"
+        },
+        {
+          "type": "time",
+          "text": "Mar 1, 2026"
+        },
+        {
+          "type": "in",
+          "text": "the weather cannot make up its mind",
+          "avatar": true,
+          "name": "Maya"
+        },
+        {
+          "type": "time",
+          "text": "Mar 17, 2026"
+        },
+        {
+          "type": "in",
+          "text": "📷 who stole the traffic cone from outside",
+          "avatar": true,
+          "name": "Kofi"
+        },
+        {
+          "type": "time",
+          "text": "Mar 21, 2026"
+        },
+        {
+          "type": "in",
+          "text": "why do people send venmo requests for $2",
+          "avatar": true,
+          "name": "Sam"
+        },
+        {
+          "type": "time",
+          "text": "Mar 27, 2026"
+        },
+        {
+          "type": "in",
+          "text": "🎬 i've watched this reel 30 times",
+          "avatar": true,
+          "name": "Dev"
+        },
+        {
+          "type": "time",
+          "text": "Apr 21, 2026"
+        },
+        {
+          "type": "in",
+          "text": "someone come to target with me",
+          "avatar": true,
+          "name": "Ana"
+        }
+      ]
     },
-    ananya: {
-      name: 'Ananya Sharma',
-      status: 'Active yesterday',
-      avatars: ['https://i.pravatar.cc/150?img=47'],
-      messages: [
-        { type: 'time', text: 'Sunday, 7:45 PM' },
-        { type: 'in', text: 'See you at 7?', avatar: true },
-        { type: 'out', text: 'Yes — cafe on Main?' },
-        { type: 'in', text: 'Perfect', avatar: true },
+    "mario-kart": {
+      "name": "mario kart council 🏎️",
+      "status": "Dev, Kofi, Ana",
+      "avatars": [
+        "https://i.pravatar.cc/150?img=12",
+        "https://i.pravatar.cc/150?img=59"
       ],
+      "messages": [
+        {
+          "type": "time",
+          "text": "Jan 2, 2026"
+        },
+        {
+          "type": "in",
+          "text": "a blue shell on the final lap should be illegal",
+          "avatar": true,
+          "name": "Dev"
+        },
+        {
+          "type": "time",
+          "text": "Jan 16, 2026"
+        },
+        {
+          "type": "in",
+          "text": "dev plays mario kart like he has a gambling addiction",
+          "avatar": true,
+          "name": "Ana"
+        },
+        {
+          "type": "time",
+          "text": "Feb 3, 2026"
+        },
+        {
+          "type": "in",
+          "text": "we need a mario kart rematch this is not over",
+          "avatar": true,
+          "name": "Kofi"
+        },
+        {
+          "type": "time",
+          "text": "Feb 9, 2026"
+        },
+        {
+          "type": "in",
+          "text": "the mario kart beef is back on, kofi said something about my kart",
+          "avatar": true,
+          "name": "Dev"
+        },
+        {
+          "type": "time",
+          "text": "Mar 1, 2026"
+        },
+        {
+          "type": "in",
+          "text": "dev still hasn't recovered from the rainbow road incident",
+          "avatar": true,
+          "name": "Ana"
+        },
+        {
+          "type": "time",
+          "text": "Mar 5, 2026"
+        },
+        {
+          "type": "in",
+          "text": "mario kart night got so heated the RA came up",
+          "avatar": true,
+          "name": "Kofi"
+        }
+      ]
     },
-    ram: {
-      name: 'Ram Bontha',
-      status: 'Active now',
-      avatars: ['https://i.pravatar.cc/150?img=12'],
-      messages: [
-        { type: 'time', text: 'Saturday, 2:11 PM' },
-        { type: 'out', text: 'Bro that note 🔥' },
-        { type: 'in', text: 'Current obsession is real', avatar: true },
+    "lisbon": {
+      "name": "Maya & Sam",
+      "status": "Maya, Sam",
+      "avatars": [
+        "https://i.pravatar.cc/150?img=47",
+        "https://i.pravatar.cc/150?img=15"
       ],
+      "messages": [
+        {
+          "type": "time",
+          "text": "Jul 18, 2025"
+        },
+        {
+          "type": "in",
+          "text": "lisbon has me thinking abt dropping out and selling sardines",
+          "avatar": true,
+          "name": "Maya"
+        },
+        {
+          "type": "time",
+          "text": "Jul 20, 2025"
+        },
+        {
+          "type": "in",
+          "text": "bffr you are not selling sardines in lisbon",
+          "avatar": true,
+          "name": "Sam"
+        },
+        {
+          "type": "in",
+          "text": "the lisbon hostel ppl adopted me im their emotional support american",
+          "avatar": true,
+          "name": "Maya"
+        },
+        {
+          "type": "time",
+          "text": "Jul 21, 2025"
+        },
+        {
+          "type": "in",
+          "text": "last night in lisbon im gonna cry",
+          "avatar": true,
+          "name": "Maya"
+        },
+        {
+          "type": "time",
+          "text": "Jul 24, 2025"
+        },
+        {
+          "type": "in",
+          "text": "flight home from lisbon delayed 6 hrs. portugal doesn't want me to leave fr",
+          "avatar": true,
+          "name": "Maya"
+        },
+        {
+          "type": "in",
+          "text": "u better bring me back a pastel de nata from portugal or dont come back at all",
+          "avatar": true,
+          "name": "Sam"
+        }
+      ]
     },
-    'group-shourya': {
-      name: 'Anyone but Shourya',
-      status: 'Active 3h ago',
-      avatars: [
-        'https://i.pravatar.cc/150?img=15',
-        'https://i.pravatar.cc/150?img=25',
+    "f1-club": {
+      "name": "5am f1 club 🏁",
+      "status": "Dev, Riya",
+      "avatars": [
+        "https://i.pravatar.cc/150?img=12",
+        "https://i.pravatar.cc/150?img=49"
       ],
-      messages: [
-        { type: 'time', text: 'Today, 9:01 AM' },
-        { type: 'in', text: 'Who is bringing snacks?', avatar: true, name: 'Ayaan' },
-        { type: 'out', text: 'I got chips' },
-        { type: 'in', text: 'Legend', avatar: true, name: 'Kabir' },
-      ],
-    },
-    founders: {
-      name: 'Startup founders',
-      status: 'Mia Chen is active',
-      avatars: [
-        'https://i.pravatar.cc/150?img=5',
-        'https://i.pravatar.cc/150?img=41',
-      ],
-      messages: [
-        { type: 'time', text: 'Friday, 1:20 PM' },
-        { type: 'in', text: 'deck looks good', avatar: true, name: 'Mia' },
-        { type: 'out', text: 'Ship notes tonight?' },
-        { type: 'in', text: 'Yes', avatar: true, name: 'Alex' },
-      ],
-    },
+      "messages": [
+        {
+          "type": "time",
+          "text": "Today"
+        },
+        {
+          "type": "in",
+          "text": "made this so we stop spamming the main chat about f1",
+          "avatar": true,
+          "name": "Dev"
+        }
+      ]
+    }
   };
 
   const emptyEl = document.getElementById('dm-empty');

@@ -512,6 +512,8 @@
     const media = r.media || {};
     const label = GAME_LABELS[r.game_type] || 'Round';
     const open = isOpen(r);
+    // The author sits out their own "who sent this?" round and watches the others guess.
+    const sittingOut = !revealed && !roundPlayers(r).includes(room.viewer);
     if (open && !revealed && !iSubmitted && !drafts[r.id]) drafts[r.id] = { choice: 'open', why: '' };
     const labelOf = (id) => (r.options || []).find((o) => optionId(o) === id)?.label || '';
     const tally = {};
@@ -536,7 +538,7 @@
         ]
           .filter(Boolean)
           .join(' ');
-        const disabled = revealed || iSubmitted || sending || r.phase !== 'answering';
+        const disabled = revealed || iSubmitted || sending || sittingOut || r.phase !== 'answering';
         const count = revealed && judged ? ` · ${tally[id] || 0}` : '';
         return `<button type="button" class="${cls}" data-round="${escapeHtml(r.id)}" data-value="${escapeHtml(id)}" ${disabled ? 'disabled' : ''}>${escapeHtml(opt.label)}${count}</button>`;
       })
@@ -586,7 +588,9 @@
       const pending = players.filter((id) => !submitted.includes(id) && id !== room.viewer).map(profileName);
       const prompt = open ? 'Type your take' : needsWhy(r) ? (draft?.choice ? 'Now say why' : 'Pick a side') : 'Your move';
       footer = `<div class="g-wait">${
-        iSubmitted
+        sittingOut
+          ? `This one's yours 👀 · watching ${escapeHtml(pending.join(', ') || 'everyone')} guess`
+          : iSubmitted
           ? pending.length
             ? `Answer locked · waiting on ${escapeHtml(pending.join(', '))}`
             : 'Answer locked'
