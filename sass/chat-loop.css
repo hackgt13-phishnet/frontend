@@ -40,3 +40,23 @@
 @media (prefers-reduced-motion: reduce) {
   .dm-bubble.gm-bubble, .gm-result { animation: none; }
 }
+
+/* Where a round came from: the exact messages and posts behind it. */
+.g-src { margin: 10px auto 0; max-width: 340px; text-align: left; }
+.g-src:empty { display: none; }
+.g-src-chip {
+  display: inline-flex; align-items: center; gap: 6px; margin: 0 auto; padding: 6px 12px; border-radius: 999px;
+  border: 1px solid rgba(55, 151, 240, .35); background: rgba(94, 196, 255, .12); color: #2563eb;
+  font: 700 12.5px/1.2 inherit; cursor: pointer; width: 100%; justify-content: center;
+}
+.g-src-mark { font-size: 12px; }
+.g-src-caret { margin-left: auto; opacity: .7; }
+.g-src-body { display: none; margin-top: 8px; padding: 10px 12px; border-radius: 16px; background: #fff; border: 1px solid #dbeafe; }
+.g-src.open .g-src-body { display: block; animation: gm-in 260ms ease-out; }
+.g-src-body ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.g-src-body li { display: flex; gap: 10px; align-items: flex-start; }
+.g-src-body li img { width: 40px; height: 40px; border-radius: 8px; object-fit: cover; flex: none; }
+.g-src-body li span { display: block; font-size: 11.5px; font-weight: 700; color: #3797f0; text-transform: uppercase; letter-spacing: .04em; }
+.g-src-body li p { margin: 2px 0 0; font-size: 13.5px; line-height: 1.35; color: #1b1530; }
+.g-src-body li em { color: #6f6a80; font-style: normal; }
+.g-src-moment { margin: 10px 0 0; padding-top: 8px; border-top: 1px dashed #dbeafe; font-size: 12.5px; color: #46506a; font-weight: 600; }
