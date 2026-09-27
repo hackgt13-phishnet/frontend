@@ -242,7 +242,7 @@
       const side = msg.from === 'in' ? 'in' : 'out';
       return `
         <div class="dm-row ${side}">
-          <button type="button" class="gp-invite" data-room="${escapeHtml(msg.roomId || '')}" data-host="${msg.isHost ? '1' : '0'}">
+          <button type="button" class="gp-invite ${msg.action === 'Play' ? 'm-ready' : ''}" data-room="${escapeHtml(msg.roomId || '')}" data-host="${msg.isHost ? '1' : '0'}">
             <div class="gp-invite-art" aria-hidden="true">
               <img src="./images/chaos-logo-blue.svg" alt="">
             </div>
