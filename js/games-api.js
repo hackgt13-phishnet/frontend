@@ -133,8 +133,8 @@
     return () => supabase().removeChannel(channel);
   }
 
-  /** Lightweight watcher while a chat is open: fires when a game is sent or finishes. */
-  function watchThreadGames(roomId, onSession) {
+  /** Watcher while a chat is open: game sessions changing, and every new chat/timeline event. */
+  function watchThreadGames(roomId, onSession, onEvent) {
     const filter = `room_id=eq.${roomId}`;
     const channel = supabase()
       .channel(`thread:${roomId}`)
@@ -143,6 +143,9 @@
       )
       .on('postgres_changes', { schema: 'public', table: 'game_sessions', event: 'UPDATE', filter }, (payload) =>
         onSession(payload.new)
+      )
+      .on('postgres_changes', { schema: 'public', table: 'timeline_events', event: 'INSERT', filter }, (payload) =>
+        onEvent?.(payload.new)
       )
       .subscribe();
     return () => supabase().removeChannel(channel);

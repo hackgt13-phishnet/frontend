@@ -71,6 +71,9 @@
       members: new Map(),
       sessions: new Map(),
       rounds: new Map(),
+      // The game master's own voice: reveal lines (by round) and the closing recap (by session).
+      hostLines: new Map(),
+      recaps: new Map(),
     };
   }
 
@@ -222,6 +225,7 @@
   /* ---------- the open chat's room (one room per group chat, joined on open) ---------- */
 
   const thread = { id: null, roomId: null, unwatch: null, seq: 0 };
+  let roundCount = 0;
 
   function threadName() {
     return (window.DMChat?.getActiveThread()?.name || 'Group chat').slice(0, 80);
@@ -235,7 +239,11 @@
     thread.unwatch?.();
     thread.id = threadId;
     thread.roomId = roomRow.id;
-    thread.unwatch = api.watchThreadGames(roomRow.id, () => syncInvites(threadId));
+    thread.unwatch = api.watchThreadGames(
+      roomRow.id,
+      () => syncInvites(threadId),
+      (event) => thread.id === threadId && chatEvent(event)
+    );
     return roomRow.id;
   }
 
@@ -245,6 +253,67 @@
     thread.id = null;
     thread.roomId = null;
     thread.unwatch = null;
+  }
+
+  /* ---------- the chat itself: real messages, the game master's lines, round results ---------- */
+
+  function chatEvent(e) {
+    const dm = window.DMChat;
+    if (!dm || !e?.id) return;
+    const p = e.payload || {};
+    const me = ready.profile?.id;
+    if (e.event_type === 'message' && p.body) {
+      const mine = e.actor_profile_id === me;
+      dm.appendMessage({
+        eventId: e.id,
+        type: mine ? 'out' : 'in',
+        text: p.body,
+        name: mine ? null : profileName(e.actor_profile_id),
+        avatar: !mine,
+        avatarUrl: mine ? null : avatarUrl(e.actor_profile_id),
+      });
+    } else if ((e.event_type === 'host_line' || e.event_type === 'game_recap') && p.text) {
+      dm.appendMessage({ eventId: e.id, type: 'gm', text: p.text });
+    } else if (e.event_type === 'game_reveal' && p.reveal) {
+      dm.appendMessage({ eventId: e.id, type: 'gm-result', roomId: e.room_id, roundId: p.id, ...resultCard(p) });
+    } else if (e.event_type === 'game_prompt' && p.ordinal > 1) {
+      dm.appendMessage({ eventId: e.id, type: 'sys', text: `Round ${p.ordinal} is open` });
+      syncInvites(thread.id).catch(() => {});
+    }
+  }
+
+  function resultCard(r) {
+    const reveal = r.reveal || {};
+    const label = `Round ${r.ordinal} results`;
+    if (r.game_type === 'who_sent_this' && reveal.correct_profile_id) {
+      const results = reveal.results || [];
+      const right = results.filter((x) => x.correct).length;
+      const who = reveal.correct_profile_id === ready.profile?.id ? 'you' : profileName(reveal.correct_profile_id);
+      return { label, title: `It was ${who}`, sub: `${right}/${results.length} guessed right · tap to see` };
+    }
+    if (reveal.winner_profile_id) {
+      const best = (reveal.results || []).find((x) => x.profile_id === reveal.winner_profile_id);
+      const who = reveal.winner_profile_id === ready.profile?.id ? 'You' : profileName(reveal.winner_profile_id);
+      return { label, title: `${who} had the best take`, sub: best?.why ? `“${best.why}”` : 'tap to see everyone’s' };
+    }
+    return { label, title: cap(r.prompt || 'See the results'), sub: 'tap to see' };
+  }
+
+  async function loadChat(threadId) {
+    if (!thread.roomId || thread.id !== threadId) return;
+    const { events } = await api.timeline(thread.roomId);
+    if (thread.id !== threadId) return;
+    for (const e of events) chatEvent({ ...e, room_id: thread.roomId });
+  }
+
+  function sendChat(text) {
+    const threadId = thread.id;
+    if (!threadId || !thread.roomId || window.DMChat?.getActiveThreadId() !== threadId) return false;
+    api
+      .sendMessage(thread.roomId, text)
+      .then((e) => thread.id === threadId && chatEvent({ ...e, room_id: thread.roomId }))
+      .catch((err) => toast(err.message || 'Message not sent'));
+    return true;
   }
 
   function roundPlayers(r) {
@@ -280,7 +349,7 @@
     const sender = invite.senderName || 'A friend';
     if (invite.done) return ['Game over · see the results', 'View'];
     if (invite.myTurn == null) return [invite.mine ? '3 rounds, made for your group' : `${sender} sent a game`, 'Play'];
-    if (invite.myTurn) return [invite.mine ? 'Your turn · tap to play' : `${sender} sent a game · your turn`, 'Play'];
+    if (invite.myTurn) return [invite.mine ? 'Ready to play' : `${sender} sent a game · tap to play`, 'Play'];
     return [`Waiting on ${invite.waitingCount} ${invite.waitingCount === 1 ? 'player' : 'players'}`, 'Open'];
   }
 
@@ -337,7 +406,7 @@
       <ul class="g-features">
         ${feature(ICONS.sparkle, 'Personalized', 'Rounds based on your chat history, posts, stories, and interests.')}
         ${feature(ICONS.people, 'Made for Your Group', 'Each game is unique to your friends.')}
-        ${feature(ICONS.clock, 'Play on Your Own Time', 'Everyone answers when they can. Next round unlocks when all have answered.')}
+        ${feature(ICONS.clock, 'Play on Your Own Time', 'Answer whenever you open the chat. After each round, talk it over; the next one opens once the chat goes quiet.')}
       </ul>
       <button type="button" class="g-cta" id="g-send-chaos">Send Chaos 🎮</button>`);
     document.getElementById('g-send-chaos').addEventListener('click', (e) => sendChaos(threadId, e.currentTarget));
@@ -393,7 +462,7 @@
       `
       <img class="g-hero sm" src="${HERO}" alt="">
       <h3 class="g-sheet-title">Chaos</h3>
-      <p class="g-sheet-lead">${rounds.length || 3} rounds, made for your group</p>
+      <p class="g-sheet-lead">${snap.round_count || 3} rounds, made for your group</p>
       <div class="g-lobby-avs">${youFirst(players).reverse().map((id) => avatar(id)).join('')}</div>
       <p class="g-lobby-names">${escapeHtml(names.join(', '))}${players.includes(me) ? `${names.length ? ' + ' : ''}you` : ''}</p>
       <button type="button" class="g-cta violet" id="g-start">${label}</button>`,
@@ -421,6 +490,10 @@
       if (newer(row, room.sessions.get(row.id))) room.sessions.set(row.id, { ...room.sessions.get(row.id), ...row });
     } else if (table === 'rounds') {
       if (newer(row, room.rounds.get(row.id))) room.rounds.set(row.id, { ...room.rounds.get(row.id), ...row });
+    } else if (table === 'timeline_events') {
+      const p = row.payload || {};
+      if (row.event_type === 'host_line' && p.round_id && p.text) room.hostLines.set(p.round_id, p);
+      else if (row.event_type === 'game_recap' && p.session_id && p.text) room.recaps.set(p.session_id, p);
     }
   }
 
@@ -478,6 +551,10 @@
     room.sessions = new Map();
     for (const s of [snap.active_session, snap.last_session]) if (s) room.sessions.set(s.id, s);
     room.rounds = new Map(snap.rounds.map((r) => [r.id, r]));
+    roundCount = snap.round_count || 0;
+    room.hostLines = new Map();
+    room.recaps = new Map();
+    for (const e of snap.timeline || []) applyRow('timeline_events', e);
 
     room.hydrated = true;
     const buffered = room.buffer;
@@ -530,7 +607,11 @@
     const me = viewerId();
     return (
       rounds.find((r) => isRevealed(r) && !seenResults.has(r.id)) ||
-      rounds.find((r) => r.phase === 'answering' && roundPlayers(r).includes(me) && !answeredBy(r, me)) ||
+      rounds.find(
+        (r) =>
+          r.phase === 'answering' &&
+          (roundPlayers(r).includes(me) ? !answeredBy(r, me) : !seenResults.has(`sat:${r.id}`))
+      ) ||
       rounds.find((r) => r.phase === 'answering') ||
       null
     );
@@ -591,11 +672,15 @@
       view,
       [...submitting],
       playingAgain,
+      room.hostLines.size,
+      room.recaps.size,
     ]);
     if (key === renderKey) return;
     renderKey = key;
     paintScreen(session, rounds);
   }
+
+  const totalRounds = (rounds) => Math.max(roundCount, rounds.length);
 
   function pill(r) {
     const type = TYPES[r.game_type] || TYPES.hot_take;
@@ -642,7 +727,7 @@
       .join('')}</div>`;
   }
 
-  function paint({ subtitle, stepsHtml = '', body, foot = '', confetti = false, key }) {
+  function paint({ subtitle, stepsHtml = '', body, foot = '', confetti = false, key, mood = null }) {
     const scroller = els.play.querySelector('.g-scroll');
     const keepScroll = key === screenKey && scroller ? scroller.scrollTop : 0;
     const active = document.activeElement;
@@ -669,7 +754,9 @@
 
     const nextScroller = els.play.querySelector('.g-scroll');
     if (nextScroller) nextScroller.scrollTop = keepScroll;
+    const changed = key !== screenKey;
     screenKey = key;
+    window.GameMotion?.painted(els.play, { key, changed, mood });
     if (typing) {
       const input = els.play.querySelector(`.g-why-input[data-round="${typing.round}"]`);
       if (input) {
@@ -816,7 +903,7 @@
       body = `${intro}${options}${whyBox(r, draft)}`;
     }
     paint({
-      subtitle: `Round ${r.ordinal} of ${rounds.length}`,
+      subtitle: `Round ${r.ordinal} of ${totalRounds(rounds)}`,
       stepsHtml: r.game_type === 'who_sent_this' ? '' : steps(rounds, r),
       body,
       foot: `<button type="button" class="g-cta" data-act="submit" data-round="${escapeHtml(r.id)}" ${canSubmit(r) ? '' : 'disabled'}>${submitLabel(r)}</button>`,
@@ -841,9 +928,12 @@
 
     const me = viewerId();
     const other = rounds.find((x) => x.id !== r.id && x.phase === 'answering' && roundPlayers(x).includes(me) && !answeredBy(x, me));
+    // The person whose post it is can't guess it, so they sit the round out and watch.
+    const sittingOut = !players.includes(me);
+    if (sittingOut) markSeen(`sat:${r.id}`);
 
     paint({
-      subtitle: `Round ${r.ordinal} of ${rounds.length}`,
+      subtitle: `Round ${r.ordinal} of ${totalRounds(rounds)}`,
       stepsHtml: steps(rounds, r),
       body: `
         <div class="g-q">
@@ -863,6 +953,13 @@
             )
             .join('')}</div>
         </div>
+        ${
+          !sittingOut
+            ? ''
+            : rounds.some((x) => roundPlayers(x).includes(me))
+              ? `<p class="g-sitout">This one is yours, so you sit it out. You'll see who guessed it when everyone's in.</p>`
+              : `<p class="g-sitout">This game started before you joined, so you're watching this one. You'll be in the next game.</p>`
+        }
         ${status}`,
       foot: other
         ? `<button type="button" class="g-cta ghost" data-go="${escapeHtml(other.id)}">Play Round ${other.ordinal} while you wait</button>`
@@ -875,6 +972,11 @@
 
   function nextFoot(r, rounds) {
     const next = rounds.find((x) => x.ordinal > r.ordinal);
+    // Between rounds the game steps back: talk about it in the chat; the game master opens the next one.
+    if (!next && r.ordinal < totalRounds(rounds)) {
+      return `<p class="g-foot-note">Round ${r.ordinal + 1} opens once the chat goes quiet.</p>
+        <button type="button" class="g-cta" data-act="close">Back to chat</button>`;
+    }
     if (next) {
       const label = r.game_type === 'who_sent_this' ? `Start Round ${next.ordinal}` : 'Next Round';
       return `<button type="button" class="g-cta ${r.game_type === 'who_sent_this' ? 'reverse' : 'violet'}" data-act="next" data-round="${escapeHtml(r.id)}">${label}</button>`;
@@ -894,10 +996,23 @@
       </div>`;
   }
 
+  function hostLine(p) {
+    if (!p?.text) return '';
+    return `
+      <div class="g-host" data-host>
+        <span class="g-host-mark" aria-hidden="true">✦</span>
+        <div><b>Game master</b><p>${escapeHtml(p.text)}</p></div>
+      </div>`;
+  }
+
   function paintResults(r, rounds, session) {
     const reveal = r.reveal || {};
     const results = reveal.results || [];
     const winner = reveal.winner_profile_id;
+    const mine = results.find((res) => res.profile_id === viewerId());
+    // win: you guessed right or the AI picked your take; miss: you guessed wrong.
+    const mood =
+      r.game_type === 'who_sent_this' ? (mine ? (mine.correct ? 'win' : 'miss') : null) : winner && winner === viewerId() ? 'win' : null;
 
     if (r.game_type === 'who_sent_this') {
       const correct = reveal.correct_profile_id;
@@ -922,7 +1037,7 @@
               ? `<div class="g-divider"><span>Next up...</span></div>
                  <div class="g-panel g-next">
                    ${pill(next)}
-                   <p class="g-next-round">Round ${next.ordinal} of ${rounds.length}</p>
+                   <p class="g-next-round">Round ${next.ordinal} of ${totalRounds(rounds)}</p>
                    <h3>${escapeHtml(cap(next.prompt))}</h3>
                    <p class="g-hint">${hint(next)}</p>
                  </div>`
@@ -930,6 +1045,7 @@
           }`,
         foot: nextFoot(r, rounds, session),
         key: `r:${r.id}`,
+        mood,
       });
     }
 
@@ -978,7 +1094,7 @@
     }
 
     paint({
-      subtitle: r.game_type === 'this_or_that' ? `Round ${r.ordinal} of ${rounds.length}` : `Round ${r.ordinal} Results`,
+      subtitle: r.game_type === 'this_or_that' ? `Round ${r.ordinal} of ${totalRounds(rounds)}` : `Round ${r.ordinal} Results`,
       stepsHtml: r.game_type === 'this_or_that' ? steps(rounds, r) : '',
       body: `
         <div class="g-q">
@@ -989,6 +1105,7 @@
         <div class="g-groups">${groups}</div>`,
       foot: nextFoot(r, rounds, session),
       key: `r:${r.id}`,
+      mood,
     });
   }
 
@@ -1014,7 +1131,8 @@
             : ''
         }
         <h3 class="g-reveal-title">${escapeHtml(title)}</h3>
-        <p class="g-reveal-sub">${top ? `${top[1]} ${top[1] === 1 ? 'point' : 'points'} · ` : ''}${rounds.length} rounds</p>
+        <p class="g-reveal-sub">${top ? `${top[1]} ${top[1] === 1 ? 'point' : 'points'} · ` : ''}${totalRounds(rounds)} rounds</p>
+        ${hostLine(room.recaps.get(session.id))}
         <div class="g-board">${board
           .map(
             ([id, pts], i) => `
@@ -1036,6 +1154,7 @@
           .join('')}</div>`,
       foot: `<button type="button" class="g-cta" data-act="again" ${playingAgain ? 'disabled' : ''}>${playingAgain ? busy('Writing your rounds…') : 'Play Again 🎮'}</button>`,
       key: `s:${session.id}`,
+      mood: top && !tie && top[0] === me ? 'win' : null,
     });
   }
 
@@ -1105,7 +1224,11 @@
     if (!el || el.disabled || !els.play.contains(el)) return;
     const session = currentSession();
     const rounds = sessionRounds(session);
-    if (el.dataset.act === 'close') return exitPlayMode();
+    if (el.dataset.act === 'close') {
+      // Leaving a results screen counts as having seen it, so reopening goes to what's new.
+      if (screenKey.startsWith('r:')) markSeen(screenKey.slice(2));
+      return exitPlayMode();
+    }
     if (el.dataset.act === 'more') return toast('Chaos · AI-made rounds for your group');
     if (el.dataset.pick) return pick(view.roundId, el.dataset.pick);
     if (el.dataset.act === 'submit') return submit(el.dataset.round);
@@ -1185,12 +1308,19 @@
   });
   els.input?.addEventListener('focus', closeTray);
 
-  document.addEventListener('dm:play-game', async () => {
+  document.addEventListener('dm:play-game', async (e) => {
     const threadId = window.DMChat?.getActiveThreadId();
     if (!threadId) return;
     try {
       if (!(await ensureReady())) return;
-      await openLobby(threadId, await joinThread(threadId));
+      const roomId = await joinThread(threadId);
+      // A result card in the chat opens straight to that round's results.
+      if (e.detail?.roundId) {
+        enterPlayMode(roomId, threadId);
+        view = { roundId: e.detail.roundId, summary: false };
+        return;
+      }
+      await openLobby(threadId, roomId);
     } catch (err) {
       toast(err.message);
     }
@@ -1208,11 +1338,14 @@
       if (!(await ensureReady())) return;
       if (window.DMChat?.getActiveThreadId() !== threadId) return;
       await joinThread(threadId);
+      await loadChat(threadId);
       await syncInvites(threadId);
     } catch (err) {
       toast(err.message);
     }
   });
+
+  if (window.DMChat) window.DMChat.sendHook = (text) => (thread.roomId ? sendChat(text) : false);
 
   document.addEventListener('dm:thread-close', () => {
     if (room.playing) exitPlayMode(false);
