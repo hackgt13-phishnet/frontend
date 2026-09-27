@@ -1,5 +1,34 @@
-# Instagram-UI-v2
-Instagram Clone is a UI-centric project developed to replicate the look and feel of Instagram using modern web technologies. This project showcases proficiency in HTML, CSS, SCSS, and JavaScript by accurately recreating the user interface of Instagram, including its home page, profile page, explore section, and other features.
+# Instagram-UI-v2 + Ask your circle (Muse)
+
+Instagram web clone extended with a Muse-powered **Ask your circle** feature for the Meta social-connection hackathon track (Ben Franklin effect).
+
+## Quick start
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r server/requirements.txt
+python server/app.py
+```
+
+Open http://localhost:8000
+
+Optional Muse Spark live calls: copy `.env.example` → `.env` and set `MODEL_API_KEY` from https://ai.developer.meta.com/
+
+Without a key, the API uses a local ranking fallback so demos still work.
+
+## Ask your circle
+
+See [DEMO.md](./DEMO.md) for the 90-second Ben Franklin demo script.
+
+- UI: floating **Ask your circle** button + left-nav **Ask circle**
+- API: `POST /api/ask-circle` with `{ "query": "..." }`
+- Graph: `server/graph.json` (mock followers, posts, DMs, proximity)
+
+## Original clone
+
+Based on Seemikumari/Instagram-UI-v2.0 — home feed, stories, profile, explore, reels, messages.
+
 
 # Table of Contents
   Demo

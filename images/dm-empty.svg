@@ -1,0 +1,19 @@
+<svg width="96" height="96" viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="48" cy="48" r="35" stroke="#000" stroke-width="1.75"/>
+  <!-- Instagram Direct paper plane -->
+  <path
+    fill="none"
+    stroke="#000"
+    stroke-width="1.75"
+    stroke-linejoin="round"
+    stroke-linecap="round"
+    d="M29 51.5 67.5 33.2c1.35-.65 2.7.75 2 2.05L56.2 66.2c-.55 1.2-2.2 1.35-2.95.25L45.8 54.3l-7.7 8.35c-.85.9-2.35.45-2.5-.75L33.1 49.6 29 51.5Z"
+  />
+  <path
+    fill="none"
+    stroke="#000"
+    stroke-width="1.75"
+    stroke-linecap="round"
+    d="M45.8 54.3 68.2 34.5"
+  />
+</svg>

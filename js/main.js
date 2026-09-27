@@ -2,72 +2,114 @@
 /***************Post**************************/
 const posts = document.querySelector(".posts");
 const post_data = [
-  ['https://i.ibb.co/3S1hjKR/account1.jpg','zineb',45,'https://i.ibb.co/Jqh3rHv/img1.jpg',150,'Lorem ipsum dolor sit amet, consectetur adipisicing elit. Minima accusantium aperiam quod non minus cumque, recusandae hic soluta harum aut nulla... ',2],
-  ['https://i.ibb.co/8x4Hqdw/account2.jpg','ikram',15,'https://i.ibb.co/2ZxBFVp/img2.jpg',150,'Lorem ipsum dolor sit amet, consectetur adipisicing elit. Minima accusantium aperiam quod non minus cumque, recusandae hic soluta harum aut nulla... ',2],
-  ['https://i.ibb.co/CWbynB2/account3-1.jpg','amina',5,'https://i.ibb.co/5vQt677/img3.jpg',350,'Lorem ipsum dolor sit amet, consectetur adipisicing elit. Minima accusantium aperiam quod non minus cumque, recusandae hic soluta harum aut nulla... ',2],
-  ['https://i.ibb.co/19R19st/account4.jpg','amal',15,'https://i.ibb.co/FVVxR6x/img.jpg',150,'Lorem ipsum dolor sit amet, consectetur adipisicing elit. Minima accusantium aperiam quod non minus cumque, recusandae hic soluta harum aut nulla... ',2],
-  ['https://i.ibb.co/x68ZFKP/account6.jpg','amine',15,'https://i.ibb.co/r7xBR56/img5.jpg',150,'Lorem ipsum dolor sit amet, consectetur adipisicing elit. Minima accusantium aperiam quod non minus cumque, recusandae hic soluta harum aut nulla... ',2],
-]
+  {
+    avatar: 'https://i.pravatar.cc/150?img=59',
+    user: 'nixmainvests',
+    time: '2h',
+    audio: 'Original audio',
+    media: 'https://images.unsplash.com/photo-1556157382-97eda2d62296?w=900&h=1125&fit=crop',
+    overlay: 'day trading to afford rent + my college tuition',
+    likes: 2,
+    caption: '<a class="hashtag" href="#">#stocks</a> <a class="hashtag" href="#">#money</a> <a class="hashtag" href="#">#stockstrading</a> <a class="hashtag" href="#">#investing</a> <a class="hashtag" href="#">#crypto</a>',
+    comments: 0,
+    featured: true,
+  },
+  {
+    avatar: 'https://i.pravatar.cc/150?img=12',
+    user: 'kaushmehta',
+    time: '5h',
+    audio: null,
+    media: 'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=900&h=1125&fit=crop',
+    overlay: null,
+    likes: 1284,
+    caption: 'Markets looking interesting this week.',
+    comments: 42,
+    featured: false,
+  },
+  {
+    avatar: 'https://i.pravatar.cc/150?img=33',
+    user: 'rohan_dev',
+    time: '1d',
+    audio: null,
+    media: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=900&h=1125&fit=crop',
+    overlay: null,
+    likes: 856,
+    caption: 'Building in public.',
+    comments: 19,
+    featured: false,
+  },
+];
 
-if(posts)
+if (posts) {
   for (var i = 0; i < post_data.length; i++) {
-    const post_div = document.createElement('div')
-    post_div.classList.add("post");
+    const p = post_data[i];
+    const post_div = document.createElement('div');
+    post_div.classList.add('post');
     post_div.innerHTML = `
     <div class="info">
       <div class="person">
-          <img src="${post_data[i][0]}">
-          <a href="#">${post_data[i][1]}</a>
-          <span class="circle">.</span>
-          <span>${post_data[i][2]}m</span>
+          <img src="${p.avatar}" alt="${p.user}">
+          <div class="person-meta">
+            <div class="top-line">
+              <a href="#">${p.user}</a>
+              <span class="circle">·</span>
+              <span class="time">${p.time}</span>
+            </div>
+            ${p.audio ? `<span class="audio-label">${p.audio}</span>` : ''}
+          </div>
       </div>
       <div class="more">
-          <img src="./images/show_more.png" alt="show more">
+          <img src="./images/menu.svg" alt="More options">
       </div>
     </div>
     <div class="image">
-      <img src="${post_data[i][3]}" >
+      <img src="${p.media}" alt="">
+      ${p.overlay ? `<div class="overlay-caption">${p.overlay}</div>` : ''}
+      <button class="mute-btn" type="button" aria-label="Toggle mute">
+        <img src="./images/volume-mute.png" alt="">
+      </button>
     </div>
     <div class="desc">
       <div class="icons">
           <div class="icon_left d-flex">
               <div class="like">
-                  <img class="not_loved" src="./images/love.png" >
-                  <img class="loved" src="./images/heart.png" >
+                  <img class="not_loved" src="./images/heart.svg">
+                  <img class="loved" src="./images/heart.png">
               </div>
               <div class="chat">
                   <button type="button" class="btn p-0" data-bs-toggle="modal"
                       data-bs-target="#message_modal">
-                      <img src="./images/bubble-chat.png" >
+                      <img src="./images/comment.svg">
                   </button>
               </div>
               <div class="send">
                   <button type="button" class="btn p-0" data-bs-toggle="modal"
                       data-bs-target="#send_message_modal">
-                      <img src="./images/send.png" >
+                      <img src="./images/share.svg">
                   </button>
               </div>
           </div>
           <div class="save not_saved">
-              <img class="hide saved" src="./images/save_black.png" >
-              <img class="not_saved" src="./images/save-instagram.png" >
+              <img class="hide saved" src="./images/save_black.png">
+              <img class="not_saved" src="./images/bookmark.svg">
           </div>
       </div>
       <div class="liked">
-          <a class="bold" href="#">${post_data[i][4]} likes</a>
+          <a class="bold" href="#">${p.likes.toLocaleString()} likes</a>
       </div>
       <div class="post_desc">
           <p>
-              <a class="bold" href="#">${post_data[i][1]}</a>
-              ${post_data[i][5]}
+              <a class="bold" href="#">${p.user}</a>
+              ${p.caption}
           </p>
-          <p><a class="gray" href="#">View all ${post_data[i][6]} comments</a></p>
-          <input type="text" placeholder="Add a comments...">
+          ${p.comments > 0 ? `<p><a class="gray" href="#">View all ${p.comments} comments</a></p>` : ''}
+          <input type="text" placeholder="Add a comment...">
       </div>
     </div>
       `;
     posts.appendChild(post_div);
   }
+}
 
 /***************explore**********/
 const explore_date = [
