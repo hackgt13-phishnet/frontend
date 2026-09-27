@@ -134,7 +134,7 @@
   }
 
   /** Lightweight watcher while a chat is open: fires when a game is sent or finishes. */
-  function watchThreadGames(roomId, onSession) {
+  function watchThreadGames(roomId, onSession, onEvent) {
     const filter = `room_id=eq.${roomId}`;
     const channel = supabase()
       .channel(`thread:${roomId}`)
@@ -144,7 +144,9 @@
       .on('postgres_changes', { schema: 'public', table: 'game_sessions', event: 'UPDATE', filter }, (payload) =>
         onSession(payload.new)
       )
-      .subscribe();
+      .on('postgres_changes', { schema: 'public', table: 'rounds', event: '*', filter }, () => onSession())
+      .on('postgres_changes', { schema: 'public', table: 'timeline_events', event: 'INSERT', filter }, (payload) => onEvent?.(payload.new))
+      .subscribe((status) => { if (status === 'SUBSCRIBED') onSession(); });
     return () => supabase().removeChannel(channel);
   }
 
@@ -155,7 +157,6 @@
     async userId() {
       return (await ensureAuth()).user.id;
     },
-    releaseProfile: () => request('/demo-sessions', { method: 'DELETE' }).catch(() => {}),
     savedProfile: () => readJSON('ig_games_profile'),
     setSavedProfile: (p) => writeJSON('ig_games_profile', p),
     async profiles() {
@@ -169,23 +170,20 @@
     },
     health: () => fetch(`${cfg().apiBase}/health`).then((r) => r.ok),
     chooseProfile: (profileId) => post('/demo-sessions', { profile_id: profileId }),
-    threadRoom: (threadKey, name) =>
-      post(`/threads/${encodeURIComponent(threadKey)}/room`, { name }),
-    sendGame: (threadKey, name) =>
-      post(`/threads/${encodeURIComponent(threadKey)}/games`, {
-        name,
-        vibe: 'chaos',
-        game_type: 'who_sent_this',
-        mode: 'async',
-      }),
-    hydrate: (roomId) => request(`/rooms/${roomId}`),
+    threadGames: (key) => request(`/threads/${encodeURIComponent(key)}/games`),
+    startThreadGame: (key, name) => post(`/threads/${encodeURIComponent(key)}/games`, {name, vibe: 'chaos'}),
+    joinThreadGame: (key, sessionId) => post(`/threads/${encodeURIComponent(key)}/games/${sessionId}/join`),
+    createRoom: (name) => post('/rooms', { name }),
+    joinRoom: (code) => post('/rooms/join', { code: code.trim().toUpperCase() }),
+    savedRoom: (threadKey) => readJSON(`ig_games_room:${threadKey}`),
+    setSavedRoom: (threadKey, room) => writeJSON(`ig_games_room:${threadKey}`, room),
+    hydrate: (roomId, sessionId) => request(`/rooms/${roomId}${sessionId ? `?session_id=${encodeURIComponent(sessionId)}` : ''}`),
     timeline: (roomId, before) =>
       request(`/rooms/${roomId}/timeline${before ? `?before=${encodeURIComponent(before)}` : ''}`),
     sendMessage: (roomId, body) => post(`/rooms/${roomId}/messages`, { body }),
     startSession: (roomId) =>
-      post(`/rooms/${roomId}/sessions`, { vibe: 'chaos', game_type: 'who_sent_this' }),
-    submitResponse: (roundId, value, why) =>
-      post(`/rounds/${roundId}/responses`, why ? { value, why } : { value }),
+      post(`/rooms/${roomId}/sessions`, { vibe: 'chaos' }),
+    submitResponse: (roundId, value) => post(`/rounds/${roundId}/responses`, { value }),
     reveal: (roundId) => post(`/rounds/${roundId}/reveal`),
     advance: (roundId) => post(`/rounds/${roundId}/advance`),
     subscribeRoom,

@@ -59,6 +59,7 @@
   function emptyRoom() {
     return {
       id: null,
+      selectedSession: null,
       threadId: null,
       playing: false,
       hydrated: false,
@@ -199,7 +200,6 @@
       }
     }
 
-    await api.releaseProfile();
     const pool = allowed?.length
       ? ready.profiles.filter((p) => allowed.includes(p.display_name))
       : ready.profiles;
@@ -216,10 +216,10 @@
       toast(`You're playing as ${profile.display_name}`);
       return true;
     }
-    throw new Error('All players are in use right now. A spot frees up after 15 minutes idle.');
+    throw new Error('No demo profile is available for this sign-in. Profiles stay assigned until the demo is reset.');
   }
 
-  /* ---------- the open chat's room (one room per group chat, joined on open) ---------- */
+  /* ---------- locally remembered room connection for each chat ---------- */
 
   const thread = { id: null, roomId: null, unwatch: null, seq: 0 };
 
@@ -227,19 +227,135 @@
     return (window.DMChat?.getActiveThread()?.name || 'Group chat').slice(0, 80);
   }
 
-  async function joinThread(threadId) {
-    if (thread.id === threadId && thread.roomId) return thread.roomId;
-    const seq = ++thread.seq;
-    const roomRow = await api.threadRoom(threadId, threadName());
-    if (seq !== thread.seq) return roomRow.id;
+  function roomSetup(threadId) {
+    openSheet(`
+      <h3 class="g-sheet-title">Connect your group</h3>
+      <p class="g-sheet-lead">One person creates a room. Everyone else joins with its code before the host starts Chaos.</p>
+      <button type="button" class="g-cta" id="g-create-room">Create Room</button>
+      <form id="g-join-room">
+        <label for="g-room-code">Room code</label>
+        <input id="g-room-code" class="g-why-input" required minlength="6" maxlength="8" autocomplete="off">
+        <button type="submit" class="g-cta ghost">Join Room</button>
+      </form>`);
+    let connecting = false;
+    const connectRoom = async (create) => {
+      if (connecting) return;
+      connecting = true;
+      try {
+        const row = create ? await api.createRoom(threadName()) : await api.joinRoom(document.getElementById('g-room-code').value);
+        api.setSavedRoom(threadId, { id: row.id, join_code: row.join_code });
+        if (window.DMChat?.getActiveThreadId() !== threadId) return;
+        attachRoom(threadId, row);
+        const snap = await api.hydrate(row.id);
+        if (snap.active_session || snap.last_session) {
+          await openLobby(threadId, row.id);
+        } else {
+          const host = snap.room.host_profile_id === snap.viewer_profile_id;
+          openSheet(`<h3 class="g-sheet-title">Room connected</h3>
+            <p>Room code: <strong>${escapeHtml(row.join_code)}</strong></p>
+            <button class="g-cta" id="g-code-start" ${host ? '' : 'disabled'}>${host ? 'Start Chaos' : 'Waiting for Host'}</button>`);
+          document.getElementById('g-code-start').addEventListener('click', async (e) => {
+            e.currentTarget.disabled = true;
+            try {
+              const res = await api.startSession(row.id);
+              closeSheet(); enterPlayMode(row.id, threadId, res.session.id);
+            } catch (err) { toast(err.message); e.currentTarget.disabled = false; }
+          });
+        }
+      } catch (err) { toast(err.message); }
+      finally { connecting = false; }
+    };
+    document.getElementById('g-create-room').addEventListener('click', () => connectRoom(true));
+    document.getElementById('g-join-room').addEventListener('submit', (e) => { e.preventDefault(); connectRoom(false); });
+  }
+
+  function showChatEvent(threadId, event) {
+    const dm = window.DMChat;
+    if (dm?.getActiveThreadId() !== threadId || event.event_type !== 'message') return;
+    if (dm.getActiveThread().messages.some((m) => m.eventId === event.id)) return;
+    dm.appendMessage({ eventId: event.id, type: event.actor_profile_id === ready.profile?.id ? 'out' : 'in',
+      text: event.payload.body, name: profileName(event.actor_profile_id) });
+  }
+
+  // The composer awaits delivery before clearing its input.
+  window.sendGamesChatMessage = async (threadId, body) => {
+    if (thread.id !== threadId || !thread.roomId) return false;
+    try {
+      const event = await api.sendMessage(thread.roomId, body);
+      showChatEvent(threadId, event);
+      return true;
+    } catch (err) { toast(err.message); throw err; }
+  };
+
+  let inviteTimer = null;
+  let inviteGeneration = 0;
+  const invites = new Map();
+
+  function stopInvites() {
+    inviteGeneration++;
+    clearTimeout(inviteTimer);
+    inviteTimer = null;
+  }
+
+  async function discoverInvites(threadId) {
+    const data = await api.threadGames(threadId);
+    if (window.DMChat?.getActiveThreadId() !== threadId) return data;
+    for (const game of data.games) {
+      invites.set(game.session_id, game);
+      ensureInviteBubble(threadId, {
+        roomId: game.room_id, sessionId: game.session_id,
+        mine: game.host_profile_id === ready.profile?.id, senderName: game.host_name,
+        done: game.status === 'complete', participant: game.is_participant,
+        member: game.is_member, joinable: game.status === 'active' && game.has_unrevealed_rounds,
+      });
+    }
+    return data;
+  }
+
+  function watchInvites(threadId) {
+    stopInvites();
+    const generation = inviteGeneration;
+    const poll = async () => {
+      if (generation !== inviteGeneration || document.visibilityState === 'hidden') return;
+      try { await discoverInvites(threadId); } catch (err) { toast(err.message); }
+      if (generation === inviteGeneration && document.visibilityState !== 'hidden')
+        inviteTimer = setTimeout(poll, 5000);
+    };
+    poll();
+  }
+
+  function attachRoom(threadId, row) {
     thread.unwatch?.();
     thread.id = threadId;
-    thread.roomId = roomRow.id;
-    thread.unwatch = api.watchThreadGames(roomRow.id, () => syncInvites(threadId));
-    return roomRow.id;
+    thread.roomId = row.id;
+    if (row.join_code) api.setSavedRoom(threadId, {id: row.id, join_code: row.join_code});
+    thread.unwatch = api.watchThreadGames(row.id,
+      () => { discoverInvites(threadId).catch(() => {}); syncInvites(threadId).catch(() => {}); },
+      event => showChatEvent(threadId, event));
+  }
+
+  async function openInvite(threadId, sessionId) {
+    if (!(await ensureReady())) return;
+    await discoverInvites(threadId);
+    const game = invites.get(sessionId);
+    if (!game) throw new Error('This game invite is no longer available.');
+    if (!game.is_participant && !(game.status === 'active' && game.has_unrevealed_rounds)) {
+      if (!game.is_member) throw new Error('This game is no longer accepting players.');
+    } else if (!game.is_participant || !game.is_member) {
+      const joined = await api.joinThreadGame(threadId, sessionId);
+      attachRoom(threadId, joined.room);
+    }
+    if (window.DMChat?.getActiveThreadId() !== threadId) return;
+    if (thread.roomId !== game.room_id) {
+      const snap = await api.hydrate(game.room_id, sessionId);
+      attachRoom(threadId, snap.room);
+    }
+    closeSheet();
+    enterPlayMode(game.room_id, threadId, sessionId);
   }
 
   function leaveThread() {
+    stopInvites();
     thread.seq++;
     thread.unwatch?.();
     thread.id = null;
@@ -248,13 +364,13 @@
   }
 
   function roundPlayers(r) {
-    if (r.player_profile_ids?.length) return r.player_profile_ids;
-    return (r.options || []).map((o) => o.profile_id).filter(Boolean);
+    return r.player_profile_ids || [];
   }
 
   async function syncInvites(threadId) {
     if (!thread.roomId || thread.id !== threadId) return;
     const snap = await api.hydrate(thread.roomId);
+    for (const event of snap.timeline || []) showChatEvent(threadId, event);
     const session = snap.active_session || snap.last_session;
     if (!session || thread.id !== threadId) return;
     const host = snap.members.find((m) => m.profile_id === snap.room.host_profile_id);
@@ -265,23 +381,20 @@
         if (!(r.submitted_profile_ids || []).includes(id)) waitingOn.add(id);
       }
     }
-    ensureInviteBubble(threadId, {
-      roomId: snap.room.id,
-      sessionId: session.id,
-      mine: snap.room.host_profile_id === snap.viewer_profile_id,
-      senderName: host?.display_name,
-      done: session.status === 'complete',
-      myTurn: waitingOn.has(snap.viewer_profile_id),
-      waitingCount: waitingOn.size,
-    });
+    await discoverInvites(threadId);
   }
 
   function inviteText(invite) {
+    if (invite.participant !== undefined) {
+      if (invite.done) return ['Game ended', invite.member ? 'View Results' : 'Game Ended'];
+      if (invite.participant) return ['Your game is in progress', 'Open Game'];
+      return invite.joinable ? ['Chaos · join the game', 'Join Game'] : ['All rounds revealed', invite.member ? 'View Results' : 'Game Ended'];
+    }
     const sender = invite.senderName || 'A friend';
     if (invite.done) return ['Game over · see the results', 'View'];
     if (invite.myTurn == null) return [invite.mine ? '3 rounds, made for your group' : `${sender} sent a game`, 'Play'];
     if (invite.myTurn) return [invite.mine ? 'Your turn · tap to play' : `${sender} sent a game · your turn`, 'Play'];
-    return [`Waiting on ${invite.waitingCount} ${invite.waitingCount === 1 ? 'player' : 'players'}`, 'Open'];
+    return [invite.waitingCount ? `Waiting on ${invite.waitingCount} ${invite.waitingCount === 1 ? 'player' : 'players'}` : 'Discussion time · next round opens when chat quiets down', 'Open'];
   }
 
   function ensureInviteBubble(threadId, invite) {
@@ -290,7 +403,9 @@
     if (!chat || dm.getActiveThreadId() !== threadId) return;
     const [subtitle, action] = inviteText(invite);
     const existing = chat.messages.find((m) => m.type === 'game-invite' && m.sessionId === invite.sessionId);
+    const disabled = invite.participant !== undefined && !invite.member && !invite.joinable;
     if (existing) {
+      existing.disabled = disabled;
       if (existing.subtitle !== subtitle || existing.action !== action) {
         existing.subtitle = subtitle;
         existing.action = action;
@@ -307,6 +422,7 @@
       roomId: invite.roomId,
       sessionId: invite.sessionId,
       isHost: invite.mine,
+      disabled,
     });
   }
 
@@ -320,27 +436,20 @@
     }
     try {
       if (!(await ensureReady())) return;
-      await joinThread(threadId);
-    } catch (err) {
-      toast(err.message);
-      return;
-    }
-    const feature = (icon, title, text) => `
-      <li>
-        <span class="g-feature-icon">${icon}</span>
-        <div><strong>${title}</strong><p>${text}</p></div>
-      </li>`;
-    openSheet(`
-      <img class="g-hero" src="${HERO}" alt="">
-      <h3 class="g-sheet-title">Chaos</h3>
-      <p class="g-sheet-lead">A custom game for <strong>your group</strong>, powered by <strong>Meta Muse</strong>.</p>
-      <ul class="g-features">
-        ${feature(ICONS.sparkle, 'Personalized', 'Rounds based on your chat history, posts, stories, and interests.')}
-        ${feature(ICONS.people, 'Made for Your Group', 'Each game is unique to your friends.')}
-        ${feature(ICONS.clock, 'Play on Your Own Time', 'Everyone answers when they can. Next round unlocks when all have answered.')}
-      </ul>
-      <button type="button" class="g-cta" id="g-send-chaos">Send Chaos 🎮</button>`);
-    document.getElementById('g-send-chaos').addEventListener('click', (e) => sendChaos(threadId, e.currentTarget));
+      const data = await discoverInvites(threadId);
+      if (window.DMChat?.getActiveThreadId() !== threadId) return;
+      const active = data.games.find(g => g.status === 'active');
+      openSheet(`
+        <img class="g-hero" src="${HERO}" alt="">
+        <h3 class="g-sheet-title">Chaos</h3>
+        <p class="g-sheet-lead">Start with one player. Friends join from the chat invite. Three sequential rounds, with no answer deadline.</p>
+        <button type="button" class="g-cta" id="g-send-chaos" ${!active && !data.can_start ? 'disabled' : ''}>${active ? (active.is_participant ? 'Open Game' : 'Join Game') : data.can_start ? 'Start Chaos 🎮' : 'Waiting for Host'}</button>
+        <button type="button" class="g-cta ghost" id="g-change-room">Use a Room Code Instead</button>`);
+      document.getElementById('g-send-chaos').addEventListener('click', e => active
+        ? openInvite(threadId, active.session_id).catch(err => toast(err.message))
+        : sendChaos(threadId, e.currentTarget));
+      document.getElementById('g-change-room').addEventListener('click', () => roomSetup(threadId));
+    } catch (err) { toast(err.message); }
   }
 
   const busy = (label) => `<span class="g-spin" aria-hidden="true"></span>${label}`;
@@ -348,16 +457,17 @@
   async function sendChaos(threadId, btn) {
     if (btn.disabled) return;
     btn.disabled = true;
-    btn.innerHTML = busy('Writing your rounds…');
+    btn.innerHTML = busy('Starting game…');
     try {
-      const res = await api.sendGame(threadId, threadName());
-      ensureInviteBubble(threadId, { roomId: res.room.id, sessionId: res.session.id, mine: true });
-      await openLobby(threadId, res.room.id);
+      const res = await api.startThreadGame(threadId, threadName());
+      if (window.DMChat?.getActiveThreadId() !== threadId) return;
+      const snap = await api.hydrate(res.session.room_id);
+      attachRoom(threadId, snap.room);
+      await discoverInvites(threadId);
+      closeSheet();
+      enterPlayMode(res.session.room_id, threadId, res.session.id);
     } catch (err) {
-      if (err.status === 409 && /already running/.test(err.message)) {
-        await openLobby(threadId, await joinThread(threadId));
-        return;
-      }
+      if (err.status === 409) await discoverInvites(threadId).catch(() => {});
       closeSheet();
       toast(err.message);
     }
@@ -381,7 +491,7 @@
     room.viewer ||= snap.viewer_profile_id;
     for (const m of snap.members) if (!room.members.has(m.profile_id)) room.members.set(m.profile_id, m);
     const me = snap.viewer_profile_id;
-    const rounds = snap.rounds.filter((r) => r.session_id === session.id);
+    const rounds = snap.rounds.filter((r) => r.session_id === session.id && r.phase !== 'pending');
     const ids = [...new Set(rounds.flatMap(roundPlayers))];
     const players = ids.length ? ids : snap.members.filter((m) => !m.left_at).map((m) => m.profile_id);
     const others = players.filter((id) => id !== me);
@@ -393,7 +503,7 @@
       `
       <img class="g-hero sm" src="${HERO}" alt="">
       <h3 class="g-sheet-title">Chaos</h3>
-      <p class="g-sheet-lead">${rounds.length || 3} rounds, made for your group</p>
+      <p class="g-sheet-lead">3 rounds, made for your group</p>
       <div class="g-lobby-avs">${youFirst(players).reverse().map((id) => avatar(id)).join('')}</div>
       <p class="g-lobby-names">${escapeHtml(names.join(', '))}${players.includes(me) ? `${names.length ? ' + ' : ''}you` : ''}</p>
       <button type="button" class="g-cta violet" id="g-start">${label}</button>`,
@@ -458,7 +568,7 @@
     const roomId = room.id;
     let snap;
     try {
-      snap = await api.hydrate(roomId);
+      snap = await api.hydrate(roomId, room.selectedSession);
     } catch (err) {
       if (seq !== room.hydrateSeq || roomId !== room.id) return;
       // 4xx won't fix itself on retry; only network/5xx/timeouts should reconnect.
@@ -489,6 +599,7 @@
   /* ---------- derived state ---------- */
 
   function currentSession() {
+    if (room.selectedSession) return room.sessions.get(room.selectedSession) || null;
     let best = null;
     for (const s of room.sessions.values()) {
       if (!best) best = s;
@@ -529,8 +640,8 @@
   function defaultRound(rounds) {
     const me = viewerId();
     return (
-      rounds.find((r) => isRevealed(r) && !seenResults.has(r.id)) ||
       rounds.find((r) => r.phase === 'answering' && roundPlayers(r).includes(me) && !answeredBy(r, me)) ||
+      rounds.find((r) => isRevealed(r) && !seenResults.has(r.id)) ||
       rounds.find((r) => r.phase === 'answering') ||
       null
     );
@@ -609,7 +720,7 @@
   }
 
   const promptHtml = (r) =>
-    `<h3 class="g-prompt ${String(r.prompt || '').length > 60 ? 'long' : ''}">${escapeHtml(cap(r.prompt))}</h3>`;
+    `${isRevealed(r) && !roundPlayers(r).includes(viewerId()) ? '<p>Joined after this round</p>' : ''}<h3 class="g-prompt ${String(r.prompt || '').length > 60 ? 'long' : ''}">${escapeHtml(cap(r.prompt))}</h3>`;
 
   const isAgreeDisagree = (r) =>
     (r.options || []).map((o) => String(o.label).trim().toLowerCase()).join('|') === 'agree|disagree';
@@ -879,7 +990,8 @@
       const label = r.game_type === 'who_sent_this' ? `Start Round ${next.ordinal}` : 'Next Round';
       return `<button type="button" class="g-cta ${r.game_type === 'who_sent_this' ? 'reverse' : 'violet'}" data-act="next" data-round="${escapeHtml(r.id)}">${label}</button>`;
     }
-    const allDone = rounds.every(isRevealed);
+    const allDone = currentSession()?.status === 'complete';
+    if (!allDone) return '<button type="button" class="g-cta" data-act="close">Back to Chat · Discussion Time</button>';
     return `<button type="button" class="g-cta" data-act="next" data-round="${escapeHtml(r.id)}">${allDone ? 'View Final Summary' : 'Next Round'}</button>`;
   }
 
@@ -1034,7 +1146,7 @@
             </button>`
           )
           .join('')}</div>`,
-      foot: `<button type="button" class="g-cta" data-act="again" ${playingAgain ? 'disabled' : ''}>${playingAgain ? busy('Writing your rounds…') : 'Play Again 🎮'}</button>`,
+      foot: `<button type="button" class="g-cta" data-act="again" ${playingAgain || room.meta?.host_profile_id !== viewerId() ? 'disabled' : ''}>${playingAgain ? busy('Starting game…') : room.meta?.host_profile_id === viewerId() ? 'Play Again 🎮' : 'Waiting for Host'}</button>`,
       key: `s:${session.id}`,
     });
   }
@@ -1087,10 +1199,11 @@
     playingAgain = true;
     scheduleRender(true);
     try {
-      const res = await api.sendGame(room.threadId, threadName());
+      const res = await api.startThreadGame(room.threadId, threadName());
+      room.selectedSession = res.session.id;
       if (res?.session) applyRow('game_sessions', res.session);
       view = { roundId: null, summary: false };
-      ensureInviteBubble(room.threadId, { roomId: res.room.id, sessionId: res.session.id, mine: true });
+      ensureInviteBubble(room.threadId, { roomId: res.session.room_id, sessionId: res.session.id, mine: true });
       await hydrate();
     } catch (err) {
       toast(err.message);
@@ -1105,7 +1218,11 @@
     if (!el || el.disabled || !els.play.contains(el)) return;
     const session = currentSession();
     const rounds = sessionRounds(session);
-    if (el.dataset.act === 'close') return exitPlayMode();
+    if (el.dataset.act === 'close') {
+      const current = rounds.find((r) => r.id === view.roundId);
+      if (current && isRevealed(current)) markSeen(current.id);
+      return exitPlayMode();
+    }
     if (el.dataset.act === 'more') return toast('Chaos · AI-made rounds for your group');
     if (el.dataset.pick) return pick(view.roundId, el.dataset.pick);
     if (el.dataset.act === 'submit') return submit(el.dataset.round);
@@ -1144,7 +1261,7 @@
 
   /* ---------- play mode (full-screen game over the chat) ---------- */
 
-  function enterPlayMode(roomId, threadId) {
+  function enterPlayMode(roomId, threadId, sessionId = null) {
     if (!roomId) {
       toast('Could not find this chat’s game. Reopen the chat and try again.');
       return;
@@ -1152,6 +1269,7 @@
     if (room.playing) exitPlayMode(false);
     room = emptyRoom();
     room.id = roomId;
+    room.selectedSession = sessionId;
     room.threadId = threadId;
     room.playing = true;
     renderKey = '';
@@ -1185,15 +1303,11 @@
   });
   els.input?.addEventListener('focus', closeTray);
 
-  document.addEventListener('dm:play-game', async () => {
+  document.addEventListener('dm:play-game', async (e) => {
     const threadId = window.DMChat?.getActiveThreadId();
-    if (!threadId) return;
-    try {
-      if (!(await ensureReady())) return;
-      await openLobby(threadId, await joinThread(threadId));
-    } catch (err) {
-      toast(err.message);
-    }
+    if (!threadId || e.detail?.threadId !== threadId) return;
+    try { await openInvite(threadId, e.detail.sessionId); }
+    catch (err) { toast(err.message); }
   });
 
   document.addEventListener('dm:thread-open', async (e) => {
@@ -1204,11 +1318,19 @@
     if (thread.id !== threadId) leaveThread();
     if (!threadId) return;
     try {
-      // Opening a chat is how a phone joins its game.
+      // Restore only an explicitly connected room; new chats use the Games setup sheet.
       if (!(await ensureReady())) return;
       if (window.DMChat?.getActiveThreadId() !== threadId) return;
-      await joinThread(threadId);
-      await syncInvites(threadId);
+      watchInvites(threadId);
+      const saved = api.savedRoom(threadId);
+      if (saved) {
+        // Reading a saved room must not automatically enroll a spectator.
+        const snap = await api.hydrate(saved.id).catch(() => null);
+        if (snap && window.DMChat?.getActiveThreadId() === threadId) {
+          attachRoom(threadId, snap.room);
+          await syncInvites(threadId);
+        }
+      }
     } catch (err) {
       toast(err.message);
     }
@@ -1222,7 +1344,12 @@
   });
 
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible' && room.playing) hydrate();
+    if (document.visibilityState === 'hidden') stopInvites();
+    else {
+      const id = window.DMChat?.getActiveThreadId();
+      if (id && ready.profile) watchInvites(id);
+      if (room.playing) hydrate();
+    }
   });
 
   els.sheet?.addEventListener('click', (e) => {

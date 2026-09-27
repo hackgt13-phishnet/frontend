@@ -190,6 +190,7 @@
             detail: {
               threadId: activeId,
               roomId: btn.dataset.room,
+              sessionId: btn.dataset.session,
               isHost: btn.dataset.host === '1',
             },
           })
@@ -242,7 +243,7 @@
       const side = msg.from === 'in' ? 'in' : 'out';
       return `
         <div class="dm-row ${side}">
-          <button type="button" class="gp-invite" data-room="${escapeHtml(msg.roomId || '')}" data-host="${msg.isHost ? '1' : '0'}">
+          <button type="button" class="gp-invite" ${msg.disabled ? 'disabled' : ''} data-session="${escapeHtml(msg.sessionId || '')}" data-room="${escapeHtml(msg.roomId || '')}" data-host="${msg.isHost ? '1' : '0'}">
             <div class="gp-invite-art" aria-hidden="true">
               <img src="./images/chaos-logo-blue.svg" alt="">
             </div>
@@ -339,13 +340,21 @@
     backBtn.addEventListener('click', closeThread);
   }
 
-  composer.addEventListener('submit', (e) => {
+  let sendingMessage = false;
+  composer.addEventListener('submit', async (e) => {
     e.preventDefault();
     const text = input.value.trim();
     if (!text || !activeId) return;
-    appendOutgoing(text);
-    input.value = '';
-    syncComposer();
+    if (sendingMessage) return;
+    const target = activeId;
+    sendingMessage = true;
+    try {
+      const delivered = await window.sendGamesChatMessage?.(target, text);
+      if (!delivered && activeId === target) appendOutgoing(text);
+      if (activeId === target && input.value.trim() === text) input.value = '';
+      syncComposer();
+    } catch { /* Keep the draft; the games UI displays the delivery error. */ }
+    finally { sendingMessage = false; }
   });
 
   input.addEventListener('input', syncComposer);
