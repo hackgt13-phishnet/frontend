@@ -71,6 +71,9 @@
       members: new Map(),
       sessions: new Map(),
       rounds: new Map(),
+      // The game master's own voice: reveal lines (by round) and the closing recap (by session).
+      hostLines: new Map(),
+      recaps: new Map(),
     };
   }
 
@@ -421,6 +424,10 @@
       if (newer(row, room.sessions.get(row.id))) room.sessions.set(row.id, { ...room.sessions.get(row.id), ...row });
     } else if (table === 'rounds') {
       if (newer(row, room.rounds.get(row.id))) room.rounds.set(row.id, { ...room.rounds.get(row.id), ...row });
+    } else if (table === 'timeline_events') {
+      const p = row.payload || {};
+      if (row.event_type === 'host_line' && p.round_id && p.text) room.hostLines.set(p.round_id, p);
+      else if (row.event_type === 'game_recap' && p.session_id && p.text) room.recaps.set(p.session_id, p);
     }
   }
 
@@ -478,6 +485,9 @@
     room.sessions = new Map();
     for (const s of [snap.active_session, snap.last_session]) if (s) room.sessions.set(s.id, s);
     room.rounds = new Map(snap.rounds.map((r) => [r.id, r]));
+    room.hostLines = new Map();
+    room.recaps = new Map();
+    for (const e of snap.timeline || []) applyRow('timeline_events', e);
 
     room.hydrated = true;
     const buffered = room.buffer;
@@ -591,6 +601,8 @@
       view,
       [...submitting],
       playingAgain,
+      room.hostLines.size,
+      room.recaps.size,
     ]);
     if (key === renderKey) return;
     renderKey = key;
@@ -642,7 +654,7 @@
       .join('')}</div>`;
   }
 
-  function paint({ subtitle, stepsHtml = '', body, foot = '', confetti = false, key }) {
+  function paint({ subtitle, stepsHtml = '', body, foot = '', confetti = false, key, mood = null }) {
     const scroller = els.play.querySelector('.g-scroll');
     const keepScroll = key === screenKey && scroller ? scroller.scrollTop : 0;
     const active = document.activeElement;
@@ -669,7 +681,9 @@
 
     const nextScroller = els.play.querySelector('.g-scroll');
     if (nextScroller) nextScroller.scrollTop = keepScroll;
+    const changed = key !== screenKey;
     screenKey = key;
+    window.GameMotion?.painted(els.play, { key, changed, mood });
     if (typing) {
       const input = els.play.querySelector(`.g-why-input[data-round="${typing.round}"]`);
       if (input) {
@@ -894,10 +908,24 @@
       </div>`;
   }
 
+  function hostLine(p) {
+    if (!p?.text) return '';
+    return `
+      <div class="g-host" data-host>
+        <span class="g-host-mark" aria-hidden="true">✦</span>
+        <div><b>Game master</b><p>${escapeHtml(p.text)}</p></div>
+      </div>`;
+  }
+
   function paintResults(r, rounds, session) {
     const reveal = r.reveal || {};
     const results = reveal.results || [];
     const winner = reveal.winner_profile_id;
+    const host = hostLine(room.hostLines.get(r.id));
+    const mine = results.find((res) => res.profile_id === viewerId());
+    // win: you guessed right or the AI picked your take; miss: you guessed wrong.
+    const mood =
+      r.game_type === 'who_sent_this' ? (mine ? (mine.correct ? 'win' : 'miss') : null) : winner && winner === viewerId() ? 'win' : null;
 
     if (r.game_type === 'who_sent_this') {
       const correct = reveal.correct_profile_id;
@@ -917,6 +945,7 @@
           <h3 class="g-reveal-title">It was ${correct === viewerId() ? 'you' : escapeHtml(profileName(correct))}!</h3>
           <p class="g-reveal-sub">${right}/${total} got it right</p>
           ${quote ? `<p class="g-quote-chip">“${escapeHtml(quote)}”</p>` : ''}
+          ${host}
           ${
             next
               ? `<div class="g-divider"><span>Next up...</span></div>
@@ -930,6 +959,7 @@
           }`,
         foot: nextFoot(r, rounds, session),
         key: `r:${r.id}`,
+        mood,
       });
     }
 
@@ -986,9 +1016,11 @@
           ${promptHtml(r)}
           ${r.game_type === 'this_or_that' ? `<p class="g-hint">Here's what everyone said...</p>` : ''}
         </div>
-        <div class="g-groups">${groups}</div>`,
+        <div class="g-groups">${groups}</div>
+        ${host}`,
       foot: nextFoot(r, rounds, session),
       key: `r:${r.id}`,
+      mood,
     });
   }
 
@@ -1015,6 +1047,7 @@
         }
         <h3 class="g-reveal-title">${escapeHtml(title)}</h3>
         <p class="g-reveal-sub">${top ? `${top[1]} ${top[1] === 1 ? 'point' : 'points'} · ` : ''}${rounds.length} rounds</p>
+        ${hostLine(room.recaps.get(session.id))}
         <div class="g-board">${board
           .map(
             ([id, pts], i) => `
@@ -1036,6 +1069,7 @@
           .join('')}</div>`,
       foot: `<button type="button" class="g-cta" data-act="again" ${playingAgain ? 'disabled' : ''}>${playingAgain ? busy('Writing your rounds…') : 'Play Again 🎮'}</button>`,
       key: `s:${session.id}`,
+      mood: top && !tie && top[0] === me ? 'win' : null,
     });
   }
 
