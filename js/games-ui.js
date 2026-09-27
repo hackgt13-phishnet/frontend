@@ -1,51 +1,65 @@
-/* Instagram Games — GamePigeon-style invites in DMs, backed by Supabase Realtime rooms */
+/* Instagram Games — Chaos: GamePigeon-style rounds for a group chat, backed by Supabase Realtime rooms */
 (function () {
   const api = window.GamesAPI;
   if (!api) return;
+  const config = window.GAMES_CONFIG || {};
 
-  const GAME_LABELS = {
-    who_sent_this: 'Who Sent This?',
-    most_likely_to: 'Most Likely To',
-    hot_take: 'Hot Take',
-    this_or_that: 'This or That',
+  const WHY_MAX = 60;
+  const LOGO = './images/chaos-logo.svg';
+  const HERO = './images/chaos-hero-blue.svg';
+
+  const ICONS = {
+    close: '<svg viewBox="0 0 24 24" width="24" height="24"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+    more: '<svg viewBox="0 0 24 24" width="24" height="24"><circle cx="5" cy="12" r="1.8" fill="currentColor"/><circle cx="12" cy="12" r="1.8" fill="currentColor"/><circle cx="19" cy="12" r="1.8" fill="currentColor"/></svg>',
+    check: '<svg viewBox="0 0 24 24"><path d="m6 12.5 4 4 8-9" stroke="currentColor" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    ig: '<svg viewBox="0 0 24 24" class="g-pill-svg"><defs><linearGradient id="g-ig" x1="0" y1="24" x2="24" y2="0"><stop offset="0" stop-color="#FEC053"/><stop offset=".45" stop-color="#F2203E"/><stop offset="1" stop-color="#5258CF"/></linearGradient></defs><rect x="1" y="1" width="22" height="22" rx="6.5" fill="url(#g-ig)"/><rect x="6" y="6" width="12" height="12" rx="3.8" stroke="#fff" stroke-width="1.9" fill="none"/><circle cx="12" cy="12" r="2.9" stroke="#fff" stroke-width="1.9" fill="none"/><circle cx="16.4" cy="7.6" r="1.1" fill="#fff"/></svg>',
+    swap: '<svg viewBox="0 0 24 24" class="g-pill-svg"><rect x="1" y="1" width="22" height="22" rx="6.5" fill="#3797F0"/><path d="M7 9h10l-3-3M17 15H7l3 3" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    crown: '<svg viewBox="0 0 52 36" class="g-crown"><defs><linearGradient id="g-gold" x1="0" y1="0" x2="0" y2="36"><stop offset="0" stop-color="#FFE27A"/><stop offset="1" stop-color="#FFB000"/></linearGradient></defs><path d="M6 12l10 9L26 5l10 16 10-9-4 20H10z" fill="url(#g-gold)" stroke="#E79A00" stroke-width="1.6" stroke-linejoin="round"/><circle cx="6" cy="11" r="3.4" fill="#FFC21F"/><circle cx="26" cy="4.5" r="3.4" fill="#FFC21F"/><circle cx="46" cy="11" r="3.4" fill="#FFC21F"/></svg>',
+    sparkle: '<svg viewBox="0 0 24 24"><path d="M12 3.5c.9 4.6 2 5.7 6.6 6.6-4.6.9-5.7 2-6.6 6.6-.9-4.6-2-5.7-6.6-6.6 4.6-.9 5.7-2 6.6-6.6Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M18.5 15.5c.4 1.9.8 2.3 2.7 2.7-1.9.4-2.3.8-2.7 2.7-.4-1.9-.8-2.3-2.7-2.7 1.9-.4 2.3-.8 2.7-2.7Z" fill="currentColor"/></svg>',
+    people: '<svg viewBox="0 0 24 24"><circle cx="9" cy="8.5" r="3.2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M3.5 19c.6-3.2 2.8-5 5.5-5s4.9 1.8 5.5 5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><circle cx="16.5" cy="9" r="2.6" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M16 14.2c2.4 0 4 1.5 4.5 4.3" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>',
+    clock: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M12 7.5V12l3 2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>',
   };
-  const CHAOS = { title: 'Chaos', icon: '⚡', blurb: 'AI-made for your group · 3 rounds' };
+
+  const TYPES = {
+    who_sent_this: { pill: 'who', icon: ICONS.ig },
+    this_or_that: { label: 'This or That', pill: 'tot', icon: ICONS.swap },
+    hot_take: { label: 'Hot Take', pill: 'hot', icon: '<span class="g-pill-emoji">🔥</span>' },
+    most_likely_to: { label: 'Most Likely To', pill: 'mlt', icon: '<span class="g-pill-emoji">🎉</span>' },
+  };
 
   const els = {
     sheet: document.getElementById('g-sheet-backdrop'),
     sheetBody: document.getElementById('g-sheet-body'),
-    messages: document.getElementById('chat-messages'),
-    status: document.getElementById('chat-status'),
-    hostBar: document.getElementById('g-host-bar'),
-    composer: document.getElementById('dm-composer'),
-    input: document.getElementById('composer-input'),
-    sendBtn: document.getElementById('composer-send'),
-    rightIcons: document.querySelector('.composer-right'),
     gamesBtn: document.getElementById('composer-games'),
+    tray: document.getElementById('g-tray'),
+    trayGames: document.getElementById('g-tray-games'),
+    play: document.getElementById('g-play'),
+    toast: document.getElementById('g-toast'),
+    messages: document.getElementById('chat-messages'),
+    input: document.getElementById('composer-input'),
     backBtn: document.getElementById('dm-back'),
   };
 
   const ready = { userId: null, profile: null, profiles: [] };
   let room = emptyRoom();
   let renderKey = '';
-  // Cards already on screen skip the entrance animation when the surface is re-rendered.
-  let shownCards = new Set();
-  let renderedCards = new Set();
-  const seen = (key) => {
-    renderedCards.add(key);
-    return shownCards.has(key) ? 'seen' : '';
-  };
-  let hostBarKey = '';
   let renderQueued = false;
-  // Async players come back hours later, so picks must outlive the tab.
-  const myPicks = JSON.parse(localStorage.getItem(`ig_games_picks:${api.playerSlot}`) || '{}');
-  // Picked-but-not-sent opinion answers ({choice, why}) survive re-renders from Realtime updates.
+  let screenKey = '';
+  // Async players come back hours later, so picks and "seen this reveal" must outlive the tab.
+  const picksKey = `ig_games_picks:${api.playerSlot}`;
+  const seenKey = `ig_games_seen:${api.playerSlot}`;
+  const myPicks = JSON.parse(localStorage.getItem(picksKey) || '{}');
+  const seenResults = new Set(JSON.parse(localStorage.getItem(seenKey) || '[]'));
+  // Picked-but-not-sent answers ({choice, why}) survive re-renders from Realtime updates.
   const drafts = {};
   const submitting = new Set();
+  let view = { roundId: null, summary: false };
+  let playingAgain = false;
 
   function emptyRoom() {
     return {
       id: null,
+      threadId: null,
       playing: false,
       hydrated: false,
       hydrateSeq: 0,
@@ -57,7 +71,6 @@
       members: new Map(),
       sessions: new Map(),
       rounds: new Map(),
-      timeline: new Map(),
     };
   }
 
@@ -69,17 +82,68 @@
       .replace(/"/g, '&quot;');
   }
 
+  const cap = (s) => {
+    const text = String(s ?? '').trim();
+    return text.charAt(0).toUpperCase() + text.slice(1);
+  };
+
+  let toastTimer = null;
   function toast(message) {
-    alert(message);
+    if (!els.toast) return;
+    els.toast.textContent = message;
+    els.toast.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => els.toast.classList.remove('show'), 2800);
   }
 
-  /* ---------- sheet ---------- */
+  /* ---------- people ---------- */
 
-  function openSheet(title, lead, innerHtml) {
+  function profileName(id) {
+    return (
+      room.members.get(id)?.display_name ||
+      ready.profiles.find((p) => p.id === id)?.display_name ||
+      'Someone'
+    );
+  }
+
+  function viewerId() {
+    return room.viewer || ready.profile?.id || null;
+  }
+
+  const displayName = (id) => (id === viewerId() ? 'You' : profileName(id));
+
+  function avatarUrl(id) {
+    const name = profileName(id);
+    return (
+      room.members.get(id)?.avatar_url ||
+      ready.profiles.find((p) => p.id === id)?.avatar_url ||
+      config.avatars?.[name] ||
+      ''
+    );
+  }
+
+  function avatar(id, cls = '') {
+    const url = avatarUrl(id);
+    return url
+      ? `<img class="g-av ${cls}" src="${escapeHtml(url)}" alt="">`
+      : `<span class="g-av g-av-fallback ${cls}">${escapeHtml(profileName(id).charAt(0))}</span>`;
+  }
+
+  const youFirst = (ids) => {
+    const me = viewerId();
+    return [...ids].sort((a, b) => (b === me) - (a === me));
+  };
+
+  /* ---------- sheet + tray ---------- */
+
+  function openSheet(html, variant = '') {
+    closeTray();
+    els.sheetBody.className = `g-sheet ${variant}`;
     els.sheetBody.innerHTML = `
-      <h3>${escapeHtml(title)}</h3>
-      ${lead ? `<p class="lead">${escapeHtml(lead)}</p>` : ''}
-      ${innerHtml}`;
+      <span class="g-sheet-grip" aria-hidden="true"></span>
+      <button type="button" class="g-sheet-x" aria-label="Close">${ICONS.close}</button>
+      ${html}`;
+    els.sheetBody.querySelector('.g-sheet-x').addEventListener('click', closeSheet);
     els.sheet.classList.remove('hidden');
   }
 
@@ -88,9 +152,24 @@
     els.sheetBody.innerHTML = '';
   }
 
+  function toggleTray(force) {
+    if (!els.tray) return;
+    const open = force ?? els.tray.classList.contains('hidden');
+    els.tray.classList.toggle('hidden', !open);
+    els.gamesBtn?.classList.toggle('active', open);
+    if (open && els.messages) els.messages.scrollTop = els.messages.scrollHeight;
+  }
+
+  const closeTray = () => toggleTray(false);
+
   /* ---------- identity ---------- */
 
   let readying = null;
+
+  window.addEventListener('games:profile-lost', () => {
+    ready.profile = null;
+    ready.userId = null;
+  });
 
   function ensureReady() {
     readying ||= claimIdentity().finally(() => {
@@ -106,7 +185,7 @@
     ready.userId = userId;
     if (!ready.profiles.length) ready.profiles = await api.profiles();
 
-    const allowed = window.GAMES_CONFIG.demoPlayers;
+    const allowed = config.demoPlayers;
     const saved = api.savedProfile();
     if (saved && saved.userId === userId && (!allowed?.length || allowed.includes(saved.display_name))) {
       try {
@@ -133,26 +212,10 @@
       }
       ready.profile = { ...profile, userId };
       api.setSavedProfile(ready.profile);
-      toast(`You're ${profile.display_name}`);
+      toast(`You're playing as ${profile.display_name}`);
       return true;
     }
-    throw new Error('Every player slot is taken. Ask someone to leave or reset the demo.');
-  }
-
-  function profileName(id) {
-    return (
-      room.members.get(id)?.display_name ||
-      ready.profiles.find((p) => p.id === id)?.display_name ||
-      'Someone'
-    );
-  }
-
-  function profileAvatar(id) {
-    return (
-      room.members.get(id)?.avatar_url ||
-      ready.profiles.find((p) => p.id === id)?.avatar_url ||
-      ''
-    );
+    throw new Error('All players are in use right now. A spot frees up after 15 minutes idle.');
   }
 
   /* ---------- the open chat's room (one room per group chat, joined on open) ---------- */
@@ -183,6 +246,11 @@
     thread.unwatch = null;
   }
 
+  function roundPlayers(r) {
+    if (r.player_profile_ids?.length) return r.player_profile_ids;
+    return (r.options || []).map((o) => o.profile_id).filter(Boolean);
+  }
+
   async function syncInvites(threadId) {
     if (!thread.roomId || thread.id !== threadId) return;
     const snap = await api.hydrate(thread.roomId);
@@ -207,45 +275,43 @@
     });
   }
 
-  function inviteSubtitle(invite) {
-    if (invite.done) return 'Game over · tap to see scores';
-    if (invite.myTurn == null) return invite.mine ? CHAOS.blurb : `${invite.senderName || 'A friend'} sent a game`;
-    if (invite.myTurn) return invite.mine ? 'Your turn · tap to play' : `${invite.senderName || 'A friend'} sent a game · your turn`;
-    return `Waiting on ${invite.waitingCount} ${invite.waitingCount === 1 ? 'player' : 'players'}`;
+  function inviteText(invite) {
+    const sender = invite.senderName || 'A friend';
+    if (invite.done) return ['Game over · see the results', 'View'];
+    if (invite.myTurn == null) return [invite.mine ? '3 rounds, made for your group' : `${sender} sent a game`, 'Play'];
+    if (invite.myTurn) return [invite.mine ? 'Your turn · tap to play' : `${sender} sent a game · your turn`, 'Play'];
+    return [`Waiting on ${invite.waitingCount} ${invite.waitingCount === 1 ? 'player' : 'players'}`, 'Open'];
   }
 
   function ensureInviteBubble(threadId, invite) {
     const dm = window.DMChat;
     const chat = dm?.getActiveThread();
     if (!chat || dm.getActiveThreadId() !== threadId) return;
-    const existing = chat.messages.find(
-      (m) => m.type === 'game-invite' && m.sessionId === invite.sessionId
-    );
-    const subtitle = inviteSubtitle(invite);
+    const [subtitle, action] = inviteText(invite);
+    const existing = chat.messages.find((m) => m.type === 'game-invite' && m.sessionId === invite.sessionId);
     if (existing) {
-      if (existing.subtitle !== subtitle) {
+      if (existing.subtitle !== subtitle || existing.action !== action) {
         existing.subtitle = subtitle;
-        if (!room.playing) dm.refresh();
+        existing.action = action;
+        dm.refresh();
       }
       return;
     }
-    const message = {
+    dm.appendMessage({
       type: 'game-invite',
       from: invite.mine ? 'out' : 'in',
-      title: CHAOS.title,
+      title: 'Chaos',
       subtitle,
+      action,
       roomId: invite.roomId,
       sessionId: invite.sessionId,
       isHost: invite.mine,
-      joined: true,
-    };
-    if (room.playing) chat.messages.push(message);
-    else dm.appendMessage(message);
+    });
   }
 
-  /* ---------- picker ---------- */
+  /* ---------- Chaos sheet (send) + lobby sheet (start) ---------- */
 
-  async function openGamePicker() {
+  async function openChaosSheet() {
     const threadId = window.DMChat?.getActiveThreadId();
     if (!threadId) {
       toast('Open a chat first, then send a game.');
@@ -258,59 +324,84 @@
       toast(err.message);
       return;
     }
-    openSheet(
-      'Games',
-      `Playing as ${ready.profile.display_name}.`,
-      `
-      <div class="gp-grid">
-        <button type="button" class="gp-tile" id="gp-chaos">
-          <span class="gp-tile-icon">${CHAOS.icon}</span>
-          <strong>${CHAOS.title}</strong>
-          <span>${CHAOS.blurb}</span>
-        </button>
-        <div class="gp-tile disabled" aria-disabled="true">
-          <span class="gp-tile-icon">🔒</span>
-          <strong>More vibes</strong>
-          <span>Coming soon</span>
-        </div>
-      </div>
-      <div class="row" style="margin-top:12px">
-        <button type="button" class="g-btn secondary" id="sheet-cancel" style="flex:1">Close</button>
-      </div>`
-    );
-    document.getElementById('sheet-cancel')?.addEventListener('click', closeSheet);
-    document.getElementById('gp-chaos')?.addEventListener('click', () => sendChaos(threadId));
+    const feature = (icon, title, text) => `
+      <li>
+        <span class="g-feature-icon">${icon}</span>
+        <div><strong>${title}</strong><p>${text}</p></div>
+      </li>`;
+    openSheet(`
+      <img class="g-hero" src="${HERO}" alt="">
+      <h3 class="g-sheet-title">Chaos</h3>
+      <p class="g-sheet-lead">A custom game for <strong>your group</strong>, powered by <strong>Meta Muse</strong>.</p>
+      <ul class="g-features">
+        ${feature(ICONS.sparkle, 'Personalized', 'Rounds based on your chat history, posts, stories, and interests.')}
+        ${feature(ICONS.people, 'Made for Your Group', 'Each game is unique to your friends.')}
+        ${feature(ICONS.clock, 'Play on Your Own Time', 'Everyone answers when they can. Next round unlocks when all have answered.')}
+      </ul>
+      <button type="button" class="g-cta" id="g-send-chaos">Send Chaos 🎮</button>`);
+    document.getElementById('g-send-chaos').addEventListener('click', (e) => sendChaos(threadId, e.currentTarget));
   }
 
-  async function sendChaos(threadId) {
-    const tile = document.getElementById('gp-chaos');
-    if (tile?.disabled) return;
-    if (tile) {
-      tile.disabled = true;
-      tile.querySelector('span:last-child').textContent = 'The AI is writing your rounds…';
-    }
+  const busy = (label) => `<span class="g-spin" aria-hidden="true"></span>${label}`;
+
+  async function sendChaos(threadId, btn) {
+    if (btn.disabled) return;
+    btn.disabled = true;
+    btn.innerHTML = busy('Writing your rounds…');
     try {
       const res = await api.sendGame(threadId, threadName());
-      closeSheet();
-      ensureInviteBubble(threadId, {
-        roomId: res.room.id,
-        sessionId: res.session.id,
-        mine: true,
-      });
-      await enterPlayMode(res.room.id, threadId);
+      ensureInviteBubble(threadId, { roomId: res.room.id, sessionId: res.session.id, mine: true });
+      await openLobby(threadId, res.room.id);
     } catch (err) {
       if (err.status === 409 && /already running/.test(err.message)) {
-        closeSheet();
-        try {
-          await enterPlayMode(await joinThread(threadId), threadId);
-        } catch (joinErr) {
-          toast(joinErr.message);
-        }
+        await openLobby(threadId, await joinThread(threadId));
         return;
       }
       closeSheet();
       toast(err.message);
     }
+  }
+
+  async function openLobby(threadId, roomId) {
+    let snap;
+    try {
+      snap = await api.hydrate(roomId);
+    } catch (err) {
+      closeSheet();
+      toast(err.message);
+      return;
+    }
+    const session = snap.active_session || snap.last_session;
+    if (!session) {
+      closeSheet();
+      toast('No game in this chat yet. Send one from the Games tray.');
+      return;
+    }
+    room.viewer ||= snap.viewer_profile_id;
+    for (const m of snap.members) if (!room.members.has(m.profile_id)) room.members.set(m.profile_id, m);
+    const me = snap.viewer_profile_id;
+    const rounds = snap.rounds.filter((r) => r.session_id === session.id);
+    const ids = [...new Set(rounds.flatMap(roundPlayers))];
+    const players = ids.length ? ids : snap.members.filter((m) => !m.left_at).map((m) => m.profile_id);
+    const others = players.filter((id) => id !== me);
+    const answered = rounds.some((r) => (r.submitted_profile_ids || []).includes(me));
+    const label = session.status === 'complete' ? 'View Results' : answered ? 'Continue Game' : 'Start Game';
+    const names = others.map(profileName);
+
+    openSheet(
+      `
+      <img class="g-hero sm" src="${HERO}" alt="">
+      <h3 class="g-sheet-title">Chaos</h3>
+      <p class="g-sheet-lead">${rounds.length || 3} rounds, made for your group</p>
+      <div class="g-lobby-avs">${youFirst(players).reverse().map((id) => avatar(id)).join('')}</div>
+      <p class="g-lobby-names">${escapeHtml(names.join(', '))}${players.includes(me) ? `${names.length ? ' + ' : ''}you` : ''}</p>
+      <button type="button" class="g-cta violet" id="g-start">${label}</button>`,
+      'lobby'
+    );
+    document.getElementById('g-start').addEventListener('click', () => {
+      closeSheet();
+      enterPlayMode(roomId, threadId);
+    });
   }
 
   /* ---------- realtime store ---------- */
@@ -329,8 +420,6 @@
       if (newer(row, room.sessions.get(row.id))) room.sessions.set(row.id, { ...room.sessions.get(row.id), ...row });
     } else if (table === 'rounds') {
       if (newer(row, room.rounds.get(row.id))) room.rounds.set(row.id, { ...room.rounds.get(row.id), ...row });
-    } else if (table === 'timeline_events') {
-      room.timeline.set(row.id, row);
     }
   }
 
@@ -344,11 +433,8 @@
   }
 
   function onChannelStatus(status) {
-    if (status === 'SUBSCRIBED') {
-      hydrate();
-    } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-      reconnectSoon();
-    }
+    if (status === 'SUBSCRIBED') hydrate();
+    else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') reconnectSoon();
   }
 
   function reconnectSoon() {
@@ -377,9 +463,7 @@
       // 4xx won't fix itself on retry; only network/5xx/timeouts should reconnect.
       if (err.status >= 400 && err.status < 500 && err.status !== 408 && err.status !== 429) {
         exitPlayMode();
-        toast(
-          err.status === 403 ? err.message : err.status === 404 ? 'Game not found.' : 'Could not open the game.'
-        );
+        toast(err.status === 403 ? err.message : err.status === 404 ? 'Game not found.' : 'Could not open the game.');
         return;
       }
       reconnectSoon();
@@ -393,7 +477,6 @@
     room.sessions = new Map();
     for (const s of [snap.active_session, snap.last_session]) if (s) room.sessions.set(s.id, s);
     room.rounds = new Map(snap.rounds.map((r) => [r.id, r]));
-    for (const ev of snap.timeline) room.timeline.set(ev.id, ev);
 
     room.hydrated = true;
     const buffered = room.buffer;
@@ -421,34 +504,66 @@
       .sort((a, b) => a.ordinal - b.ordinal);
   }
 
-  function currentRound(session, rounds) {
-    if (!session || session.status !== 'active') return null;
-    const live = rounds.filter((r) => r.phase === 'answering' || r.phase === 'revealed');
-    return live[live.length - 1] || rounds.find((r) => r.ordinal === session.current_round_ordinal) || null;
-  }
-
-  function activeMembers() {
-    return [...room.members.values()].filter((m) => !m.left_at);
-  }
-
-  function isHost() {
-    return !!room.meta && room.meta.host_profile_id === room.viewer;
-  }
-
-  function sortedTimeline() {
-    return [...room.timeline.values()].sort((a, b) =>
-      a.created_at === b.created_at ? (a.id < b.id ? -1 : 1) : a.created_at < b.created_at ? -1 : 1
-    );
-  }
+  const isRevealed = (r) => r.phase === 'revealed' || r.phase === 'complete';
+  const answeredBy = (r, id) => (r.submitted_profile_ids || []).includes(id);
+  const optionId = (opt) => opt.id || opt.profile_id;
+  // Opinion rounds have no right answer: players add a one-line why and the AI judges the best one.
+  const needsWhy = (r) => r.game_type !== 'who_sent_this';
+  // Open rounds (e.g. an open Hot Take) have no options: the typed take is the whole answer.
+  const OPEN = 'open';
+  const isOpen = (r) => needsWhy(r) && !(r.options || []).length;
+  const answerFor = (r) => (isOpen(r) ? OPEN : drafts[r.id]?.choice);
 
   function scores(rounds) {
     const totals = new Map();
+    for (const r of rounds) for (const id of roundPlayers(r)) totals.set(id, totals.get(id) || 0);
     for (const r of rounds) {
       for (const res of r.reveal?.results || []) {
         totals.set(res.profile_id, (totals.get(res.profile_id) || 0) + (res.points || 0));
       }
     }
     return [...totals.entries()].sort((a, b) => b[1] - a[1]);
+  }
+
+  function defaultRound(rounds) {
+    const me = viewerId();
+    return (
+      rounds.find((r) => isRevealed(r) && !seenResults.has(r.id)) ||
+      rounds.find((r) => r.phase === 'answering' && roundPlayers(r).includes(me) && !answeredBy(r, me)) ||
+      rounds.find((r) => r.phase === 'answering') ||
+      null
+    );
+  }
+
+  function resolveView(session, rounds) {
+    if (view.summary && session?.status === 'complete') return { summary: true };
+    view.summary = false;
+    const pinned = view.roundId && rounds.find((r) => r.id === view.roundId);
+    if (pinned) return { round: pinned };
+    const next = defaultRound(rounds);
+    if (next) {
+      view.roundId = next.id;
+      return { round: next };
+    }
+    if (session?.status === 'complete') {
+      view.summary = true;
+      return { summary: true };
+    }
+    return rounds.length ? { round: rounds[rounds.length - 1] } : { empty: true };
+  }
+
+  function markSeen(roundId) {
+    seenResults.add(roundId);
+    localStorage.setItem(seenKey, JSON.stringify([...seenResults].slice(-200)));
+  }
+
+  function goNext(round, rounds, session) {
+    markSeen(round.id);
+    const next = rounds.find((r) => r.ordinal > round.ordinal);
+    if (next) view = { roundId: next.id, summary: false };
+    else if (session?.status === 'complete') view = { roundId: null, summary: true };
+    else view = { roundId: null, summary: false };
+    scheduleRender(true);
   }
 
   /* ---------- rendering ---------- */
@@ -464,302 +579,488 @@
   }
 
   function render() {
-    if (!room.playing || !room.hydrated || !els.messages) return;
+    if (!room.playing || !els.play) return;
+    if (!room.hydrated) return;
     const session = currentSession();
     const rounds = sessionRounds(session);
-    const timeline = sortedTimeline();
     const key = JSON.stringify([
-      room.meta?.revision,
       [...room.members.values()].map((m) => [m.profile_id, m.revision, m.left_at]),
       session && [session.id, session.status, session.revision],
       rounds.map((r) => [r.id, r.revision, r.phase, r.submitted_profile_ids?.length]),
-      timeline.length,
-      timeline[timeline.length - 1]?.id,
+      view,
+      [...submitting],
+      playingAgain,
     ]);
-    updateHeader();
-    updateHostBar(session, rounds);
     if (key === renderKey) return;
     renderKey = key;
-    renderSurface(session, rounds, timeline);
+    paintScreen(session, rounds);
   }
 
-  function updateHeader() {
-    const members = activeMembers();
-    if (els.status) els.status.textContent = `${members.length} in game · ${CHAOS.title}`;
+  function pill(r) {
+    const type = TYPES[r.game_type] || TYPES.hot_take;
+    const label =
+      r.game_type === 'who_sent_this'
+        ? r.media?.type === 'message'
+          ? 'Who Sent This?'
+          : 'Who Posted This?'
+        : type.label;
+    return `<span class="g-pill ${type.pill}">${type.icon}${escapeHtml(label)}</span>`;
   }
 
-  const optionId = (opt) => opt.id || opt.profile_id;
-  // Opinion rounds have no right answer: players add a one-line why and the AI judges the best one.
-  const needsWhy = (r) => r.game_type !== 'who_sent_this';
+  const promptHtml = (r) =>
+    `<h3 class="g-prompt ${String(r.prompt || '').length > 60 ? 'long' : ''}">${escapeHtml(cap(r.prompt))}</h3>`;
 
-  function roundPlayers(r) {
-    if (r.player_profile_ids?.length) return r.player_profile_ids;
-    return (r.options || []).map((o) => o.profile_id).filter(Boolean);
-  }
+  const isAgreeDisagree = (r) =>
+    (r.options || []).map((o) => String(o.label).trim().toLowerCase()).join('|') === 'agree|disagree';
 
-  function roundCard(r) {
-    const submitted = r.submitted_profile_ids || [];
-    const iSubmitted = submitted.includes(room.viewer);
-    const myPick = myPicks[r.id];
-    const draft = drafts[r.id];
-    const sending = submitting.has(r.id);
-    const revealed = r.phase === 'revealed' || r.phase === 'complete';
-    const reveal = r.reveal || {};
-    const correctId = reveal.correct_profile_id;
-    const judged = revealed ? !!reveal.winner_profile_id : needsWhy(r);
-    const media = r.media || {};
-    const label = GAME_LABELS[r.game_type] || 'Round';
-    const labelOf = (id) => (r.options || []).find((o) => optionId(o) === id)?.label || '';
-    const tally = {};
-    for (const res of reveal.results || []) tally[res.choice] = (tally[res.choice] || 0) + 1;
-
-    const quoteHtml = media.quote ? `<p class="g-quote">“${escapeHtml(media.quote)}”</p>` : '';
-    const mediaHtml = media.url
-      ? `<img class="media" src="${escapeHtml(media.url)}" alt="">`
-      : media.caption || media.asset_key
-        ? `<div class="g-media-placeholder"><span>🎬</span><p>${escapeHtml(media.caption || media.asset_key)}</p></div>`
-        : '';
-
-    const options = (r.options || [])
-      .map((opt) => {
-        const id = optionId(opt);
-        const picked = myPick === id || (!iSubmitted && draft?.choice === id);
-        const cls = [
-          'g-option',
-          revealed && correctId && id === correctId ? 'correct' : '',
-          picked ? 'mine' : '',
-          revealed && correctId && myPick === id && id !== correctId ? 'wrong' : '',
-        ]
-          .filter(Boolean)
-          .join(' ');
-        const disabled = revealed || iSubmitted || sending || r.phase !== 'answering';
-        const count = revealed && judged ? ` · ${tally[id] || 0}` : '';
-        return `<button type="button" class="${cls}" data-round="${escapeHtml(r.id)}" data-value="${escapeHtml(id)}" ${disabled ? 'disabled' : ''}>${escapeHtml(opt.label)}${count}</button>`;
-      })
-      .join('');
-
-    const players = roundPlayers(r);
-    const lastOne = submitted.length === players.length - 1;
-    const whyHtml =
-      !revealed && !iSubmitted && r.phase === 'answering' && needsWhy(r) && draft?.choice
-        ? `<div class="g-text-answer g-why">
-            <input class="g-why-input" data-round="${escapeHtml(r.id)}" maxlength="140" placeholder="why? one line, make it good" value="${escapeHtml(draft.why || '')}" ${sending ? 'disabled' : ''}>
-            <button type="button" class="g-btn primary g-why-send" data-round="${escapeHtml(r.id)}" ${sending || !(draft.why || '').trim() ? 'disabled' : ''}>${sending ? (lastOne ? 'Judging…' : 'Sending…') : 'Send'}</button>
-          </div>`
-        : '';
-
-    let footer;
-    if (revealed && judged) {
-      const winner = reveal.winner_profile_id;
-      const rows = (reveal.results || [])
-        .slice()
-        .sort((a, b) => (b.profile_id === winner) - (a.profile_id === winner))
-        .map(
-          (res) => `
-            <div class="g-answer-row ${res.profile_id === winner ? 'winner' : ''}">
-              <strong>${res.profile_id === winner ? '🏆 ' : ''}${escapeHtml(profileName(res.profile_id))} <span class="g-pick">· ${escapeHtml(labelOf(res.choice))}</span></strong>
-              ${res.why ? `<p class="g-why-text">“${escapeHtml(res.why)}”</p>` : ''}
-            </div>`
-        )
-        .join('');
-      footer = `
-        ${reveal.shoutout ? `<p class="g-reveal-copy">🎲 ${escapeHtml(reveal.shoutout)}</p>` : ''}
-        <div class="g-answers">${rows}</div>
-        <div class="g-result ${winner === room.viewer ? 'win' : 'lose'}">${
-          winner === room.viewer ? 'Your answer won · +1' : `${escapeHtml(profileName(winner))} took this one`
-        }</div>`;
-    } else if (revealed) {
-      const mine = (reveal.results || []).find((res) => res.profile_id === room.viewer);
-      const winners = (reveal.results || []).filter((res) => res.correct).map((res) => profileName(res.profile_id));
-      footer = `
-        <p class="g-reveal-copy">${escapeHtml(reveal.message || `${profileName(correctId)} sent it!`)}</p>
-        ${mine ? `<div class="g-result ${mine.correct ? 'win' : 'lose'}">${mine.correct ? `You got it · +${mine.points}` : 'Not this time'}</div>` : ''}
-        <div class="g-wait">${winners.length ? `Got it: ${escapeHtml(winners.join(', '))}` : 'Nobody got it'}</div>`;
-    } else {
-      const answered = submitted.length;
-      const total = r.required_response_count || players.length;
-      const who = submitted.map(profileName).join(', ');
-      const pending = players.filter((id) => !submitted.includes(id) && id !== room.viewer).map(profileName);
-      const prompt = needsWhy(r) ? (draft?.choice ? 'Now say why' : 'Pick a side') : 'Your move';
-      footer = `<div class="g-wait">${
-        iSubmitted
-          ? pending.length
-            ? `Answer locked · waiting on ${escapeHtml(pending.join(', '))}`
-            : 'Answer locked'
-          : `${prompt} · ${answered}/${total} answered${who ? ` <span class="g-who">(${escapeHtml(who)})</span>` : ''}`
-      }</div>`;
+  function hint(r) {
+    switch (r.game_type) {
+      case 'this_or_that':
+        return 'Pick a side and give a one-line reason.';
+      case 'hot_take':
+        if (isOpen(r)) return 'Type your take. One line is enough.';
+        return isAgreeDisagree(r) ? 'Agree or disagree, then give a one-line reason.' : 'Pick one, then give a one-line reason.';
+      case 'most_likely_to':
+        return 'Vote for one friend and say why.';
+      default:
+        return r.media?.type === 'message' ? 'Guess which friend sent it.' : 'Guess which friend posted it.';
     }
+  }
 
+  function cubes(extra) {
+    const n = extra ? 9 : 5;
+    return Array.from({ length: n }, (_, i) => `<i class="g-cube c${i + 1}"></i>`).join('');
+  }
+
+  function steps(rounds, current) {
+    return `<div class="g-steps">${rounds
+      .map(
+        (r) =>
+          `<button type="button" class="g-step ${current && r.id === current.id ? 'on' : ''}" data-round="${escapeHtml(r.id)}" aria-label="Round ${r.ordinal}"></button>`
+      )
+      .join('')}</div>`;
+  }
+
+  function paint({ subtitle, stepsHtml = '', body, foot = '', confetti = false, key }) {
+    const scroller = els.play.querySelector('.g-scroll');
+    const keepScroll = key === screenKey && scroller ? scroller.scrollTop : 0;
+    const active = document.activeElement;
+    const typing = active?.classList?.contains('g-why-input')
+      ? { round: active.dataset.round, start: active.selectionStart, end: active.selectionEnd }
+      : null;
+
+    els.play.innerHTML = `
+      <div class="g-bg ${confetti ? 'confetti' : ''}" aria-hidden="true">${cubes(confetti)}</div>
+      <header class="g-top">
+        <button type="button" class="g-icon-btn" data-act="close" aria-label="Close game">${ICONS.close}</button>
+        <button type="button" class="g-icon-btn" data-act="more" aria-label="More">${ICONS.more}</button>
+      </header>
+      <div class="g-scroll">
+        <div class="g-head">
+          <img class="g-logo" src="${LOGO}" alt="">
+          <h2>Chaos</h2>
+          <p>${escapeHtml(subtitle)}</p>
+          ${stepsHtml}
+        </div>
+        ${body}
+      </div>
+      <div class="g-foot ${foot ? '' : 'empty'}">${foot}</div>`;
+
+    const nextScroller = els.play.querySelector('.g-scroll');
+    if (nextScroller) nextScroller.scrollTop = keepScroll;
+    screenKey = key;
+    if (typing) {
+      const input = els.play.querySelector(`.g-why-input[data-round="${typing.round}"]`);
+      if (input) {
+        input.focus({ preventScroll: true });
+        input.setSelectionRange(typing.start, typing.end);
+      }
+    }
+  }
+
+  function paintLoading(text = 'Loading your game…') {
+    els.play.innerHTML = `
+      <div class="g-bg" aria-hidden="true">${cubes()}</div>
+      <header class="g-top">
+        <button type="button" class="g-icon-btn" data-act="close" aria-label="Close game">${ICONS.close}</button>
+        <span></span>
+      </header>
+      <div class="g-scroll g-center">
+        <img class="g-logo lg" src="${LOGO}" alt="">
+        <h2 class="g-loading-title">Chaos</h2>
+        <div class="g-waiting"><span class="g-dots"><i></i><i></i><i></i></span>${escapeHtml(text)}</div>
+      </div>`;
+    screenKey = 'loading';
+  }
+
+  function paintScreen(session, rounds) {
+    const target = resolveView(session, rounds);
+    if (target.summary) return paintSummary(session, rounds);
+    if (target.empty) {
+      return paint({
+        subtitle: 'No game yet',
+        body: `<div class="g-waiting">Send a game from the Games tray to start.</div>`,
+        key: 'empty',
+      });
+    }
+    const r = target.round;
+    const me = viewerId();
+    if (isRevealed(r)) return paintResults(r, rounds, session);
+    if (answeredBy(r, me) || !roundPlayers(r).includes(me)) return paintWaiting(r, rounds);
+    return paintQuestion(r, rounds);
+  }
+
+  /* ----- question ----- */
+
+  function peopleChoices(r, selected) {
+    const opts = (r.options || []).filter((o) => o.profile_id);
+    const ordered = youFirst(opts.map((o) => o.profile_id)).map((id) => opts.find((o) => o.profile_id === id));
+    return `<div class="g-people">${ordered
+      .map((o) => {
+        const id = optionId(o);
+        return `
+          <button type="button" class="g-person ${selected === id ? 'on' : ''}" data-pick="${escapeHtml(id)}">
+            <span class="g-av-wrap">${avatar(o.profile_id)}<span class="g-tick">${ICONS.check}</span></span>
+            <span class="g-person-name">${escapeHtml(displayName(o.profile_id))}</span>
+          </button>`;
+      })
+      .join('')}</div>`;
+  }
+
+  function postCard(r, compact = false) {
+    const media = r.media || {};
+    const quote = media.quote || media.caption || '';
     return `
-      <div class="g-card ${revealed ? 'revealed' : ''} ${seen(r.id)}" data-round="${escapeHtml(r.id)}">
-        <div class="accent"></div>
-        <div class="body">
-          <span class="label">${revealed ? 'Revealed' : CHAOS.title} · Round ${r.ordinal} · ${escapeHtml(label)}</span>
-          <h4>${escapeHtml(r.prompt)}</h4>
-          ${quoteHtml}
-          ${mediaHtml}
-          <div class="g-options">${options}</div>
-          ${whyHtml}
-          ${footer}
+      <div class="g-post-card ${compact ? 'compact' : ''}">
+        ${compact ? '' : pill(r)}
+        <div class="g-post-media ${media.url ? '' : 'noimg'}">
+          ${media.url ? `<img src="${escapeHtml(media.url)}" alt="">` : '<span class="g-sun"></span><span class="g-hills"></span>'}
+          ${quote ? `<div class="g-post-quote">“${escapeHtml(quote)}”<span class="g-heart">❤️</span></div>` : ''}
         </div>
       </div>`;
   }
 
-  function roundIdOf(ev) {
-    const p = ev.payload || {};
-    return p.id || p.round_id || null;
+  function whyBox(r, draft) {
+    const why = draft.why || '';
+    const placeholder = isOpen(r)
+      ? 'Type your take…'
+      : {
+          this_or_that: 'Why did you choose this?',
+          hot_take: 'Why? One line is enough',
+          most_likely_to: 'Why them?',
+        }[r.game_type];
+    return `
+      <label class="g-why">
+        <input class="g-why-input" data-round="${escapeHtml(r.id)}" maxlength="${WHY_MAX}" placeholder="${placeholder || 'Why?'}" value="${escapeHtml(why)}" ${submitting.has(r.id) ? 'disabled' : ''}>
+        <span class="g-count">${why.length}/${WHY_MAX}</span>
+      </label>`;
   }
 
-  function renderSurface(session, rounds, timeline) {
-    renderedCards = new Set();
-    const parts = [
-      `<div class="dm-row ${isHost() ? 'out' : 'in'}">
-        <div class="gp-invite active ${seen('invite')}">
-          <div class="gp-invite-art"><span class="gp-die">${CHAOS.icon}</span></div>
-          <div class="gp-invite-meta">
-            <strong>${CHAOS.title}</strong>
-            <span>${escapeHtml(activeMembers().map((m) => m.display_name || profileName(m.profile_id)).join(', '))}</span>
-          </div>
+  function canSubmit(r) {
+    const draft = drafts[r.id] || {};
+    if (!answerFor(r) || submitting.has(r.id)) return false;
+    return !needsWhy(r) || !!(draft.why || '').trim();
+  }
+
+  function submitLabel(r) {
+    if (submitting.has(r.id)) {
+      const players = roundPlayers(r);
+      const last = (r.submitted_profile_ids || []).length === players.length - 1;
+      return busy(last && needsWhy(r) ? 'Judging answers…' : 'Sending…');
+    }
+    return r.game_type === 'most_likely_to' ? 'Submit Vote' : 'Submit Answer';
+  }
+
+  function paintQuestion(r, rounds) {
+    const draft = drafts[r.id] || {};
+    const choice = draft.choice;
+    let body;
+    if (r.game_type === 'who_sent_this') {
+      body = `
+        ${postCard(r)}
+        <h4 class="g-ask">${escapeHtml(cap(r.prompt || 'Who posted this?'))}</h4>
+        ${peopleChoices(r, choice)}`;
+    } else {
+      const intro = `
+        <div class="g-q">
+          ${pill(r)}
+          ${promptHtml(r)}
+          <p class="g-hint">${hint(r)}</p>
+        </div>`;
+      let options;
+      if (isOpen(r)) {
+        options = '';
+      } else if (r.game_type === 'most_likely_to' && (r.options || []).some((o) => o.profile_id)) {
+        options = peopleChoices(r, choice);
+      } else if (r.game_type === 'this_or_that') {
+        options = `<div class="g-scenes">${(r.options || [])
+          .map(
+            (o, i) => `
+              <button type="button" class="g-scene s${i % 4} ${choice === optionId(o) ? 'on' : ''}" data-pick="${escapeHtml(optionId(o))}">
+                <span class="g-scene-label">${escapeHtml(cap(o.label))}</span>
+                <span class="g-radio">${ICONS.check}</span>
+              </button>`
+          )
+          .join('')}</div>`;
+      } else {
+        options = `<div class="g-rows">${(r.options || [])
+          .map(
+            (o) => `
+              <button type="button" class="g-row-opt ${choice === optionId(o) ? 'on' : ''}" data-pick="${escapeHtml(optionId(o))}">
+                <span class="g-check">${ICONS.check}</span>${escapeHtml(cap(o.label))}
+              </button>`
+          )
+          .join('')}</div>`;
+      }
+      body = `${intro}${options}${whyBox(r, draft)}`;
+    }
+    paint({
+      subtitle: `Round ${r.ordinal} of ${rounds.length}`,
+      stepsHtml: r.game_type === 'who_sent_this' ? '' : steps(rounds, r),
+      body,
+      foot: `<button type="button" class="g-cta" data-act="submit" data-round="${escapeHtml(r.id)}" ${canSubmit(r) ? '' : 'disabled'}>${submitLabel(r)}</button>`,
+      key: `q:${r.id}`,
+    });
+  }
+
+  /* ----- waiting ----- */
+
+  function paintWaiting(r, rounds) {
+    const players = youFirst(roundPlayers(r));
+    const done = r.submitted_profile_ids || [];
+    const pending = players.filter((id) => !done.includes(id));
+    const names = pending.map(displayName);
+    const judging = !pending.length;
+    const status = judging
+      ? `<div class="g-waiting"><span class="g-dots"><i></i><i></i><i></i></span>The AI is judging the answers…</div>`
+      : pending.length === 1
+        ? `<div class="g-waiting"><span class="g-dots"><i></i><i></i><i></i></span>Waiting for ${escapeHtml(names[0])} to answer...</div>`
+        : `<div class="g-waiting"><span class="g-dots"><i></i><i></i><i></i></span>Round reveals when the last person answers.</div>
+           <p class="g-waiting-sub">Waiting for ${escapeHtml(names.join(', '))}...</p>`;
+
+    const me = viewerId();
+    const other = rounds.find((x) => x.id !== r.id && x.phase === 'answering' && roundPlayers(x).includes(me) && !answeredBy(x, me));
+
+    paint({
+      subtitle: `Round ${r.ordinal} of ${rounds.length}`,
+      stepsHtml: steps(rounds, r),
+      body: `
+        <div class="g-q">
+          ${pill(r)}
+          ${promptHtml(r)}
         </div>
-      </div>`,
-    ];
+        ${r.game_type === 'who_sent_this' && (r.media?.quote || r.media?.caption) ? `<p class="g-quote-chip">“${escapeHtml(r.media.quote || r.media.caption)}”</p>` : ''}
+        <div class="g-panel g-answered">
+          <p class="g-answered-title">${done.length}/${players.length} have answered</p>
+          <div class="g-people static">${players
+            .map(
+              (id) => `
+              <div class="g-person">
+                <span class="g-av-wrap">${avatar(id)}<span class="g-badge-dot ${done.includes(id) ? 'done' : ''}">${done.includes(id) ? ICONS.check : ''}</span></span>
+                <span class="g-person-name">${escapeHtml(displayName(id))}</span>
+              </div>`
+            )
+            .join('')}</div>
+        </div>
+        ${status}`,
+      foot: other
+        ? `<button type="button" class="g-cta ghost" data-go="${escapeHtml(other.id)}">Play Round ${other.ordinal} while you wait</button>`
+        : '',
+      key: `w:${r.id}`,
+    });
+  }
 
-    const roundsById = new Map(rounds.map((r) => [r.id, r]));
-    const placed = new Set();
+  /* ----- results ----- */
 
-    for (const ev of timeline) {
-      const p = ev.payload || {};
-      switch (ev.event_type) {
-        case 'message': {
-          const mine = ev.actor_profile_id === room.viewer;
-          const name = profileName(ev.actor_profile_id);
-          const avatar = profileAvatar(ev.actor_profile_id);
-          parts.push(`
-            <div class="g-msg-row ${mine ? 'out' : 'in'}">
-              ${!mine && avatar ? `<img class="av" src="${escapeHtml(avatar)}" alt="">` : ''}
-              <div>
-                ${!mine ? `<div class="g-sender">${escapeHtml(name)}</div>` : ''}
-                <div class="bubble">${escapeHtml(p.body)}</div>
-              </div>
-            </div>`);
-          break;
-        }
-        case 'host_line':
-          parts.push(`<div class="g-host-line"><span>🎲 Game master</span>${escapeHtml(p.text)}</div>`);
-          break;
-        case 'game_started':
-          parts.push(`<div class="g-system">${CHAOS.title} started</div>`);
-          break;
-        case 'game_prompt': {
-          const r = roundsById.get(roundIdOf(ev));
-          if (r && !placed.has(r.id)) {
-            placed.add(r.id);
-            parts.push(roundCard(r));
-          }
-          break;
-        }
-        case 'game_reveal':
-          if (p.game_over) parts.push(`<div class="g-system">Game over</div>`);
-          break;
-        case 'game_over':
-          parts.push(`<div class="g-system">Game over</div>`);
-          break;
-        default:
-          break;
-      }
+  function nextFoot(r, rounds) {
+    const next = rounds.find((x) => x.ordinal > r.ordinal);
+    if (next) {
+      const label = r.game_type === 'who_sent_this' ? `Start Round ${next.ordinal}` : 'Next Round';
+      return `<button type="button" class="g-cta ${r.game_type === 'who_sent_this' ? 'reverse' : 'violet'}" data-act="next" data-round="${escapeHtml(r.id)}">${label}</button>`;
     }
-    for (const r of rounds) if (!placed.has(r.id)) parts.push(roundCard(r));
+    const allDone = rounds.every(isRevealed);
+    return `<button type="button" class="g-cta" data-act="next" data-round="${escapeHtml(r.id)}">${allDone ? 'View Final Summary' : 'Next Round'}</button>`;
+  }
 
-    if (session?.status === 'complete') {
-      const board = scores(rounds);
-      parts.push(`
-        <div class="g-card revealed ${seen(`scores:${session.id}`)}">
-          <div class="accent"></div>
-          <div class="body">
-            <span class="label">Final scores</span>
-            <div class="g-answers">${
-              board.length
-                ? board
-                    .map(
-                      ([id, pts], i) =>
-                        `<div class="g-answer-row"><strong>${i === 0 ? '👑 ' : ''}${escapeHtml(profileName(id))}</strong><span>${pts} pt${pts === 1 ? '' : 's'}</span></div>`
-                    )
-                    .join('')
-                : '<div class="g-wait">No points this time</div>'
-            }</div>
+  function saidRow(res, winner) {
+    return `
+      <div class="g-said">
+        ${avatar(res.profile_id)}
+        <div class="g-said-bubble">
+          <strong>${escapeHtml(displayName(res.profile_id))}${res.profile_id === winner ? '<span class="g-best">👑 Best answer</span>' : ''}</strong>
+          ${res.why ? `<p>“${escapeHtml(res.why)}”</p>` : ''}
+        </div>
+      </div>`;
+  }
+
+  function paintResults(r, rounds, session) {
+    const reveal = r.reveal || {};
+    const results = reveal.results || [];
+    const winner = reveal.winner_profile_id;
+
+    if (r.game_type === 'who_sent_this') {
+      const correct = reveal.correct_profile_id;
+      const right = results.filter((res) => res.correct).length;
+      const total = results.length || roundPlayers(r).length;
+      const next = rounds.find((x) => x.ordinal > r.ordinal);
+      const quote = r.media?.quote || r.media?.caption;
+      return paint({
+        subtitle: `Round ${r.ordinal} Results`,
+        confetti: true,
+        body: `
+          <div class="g-winner">
+            <span class="g-rays" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></span>
+            ${ICONS.crown}
+            <span class="g-ring">${avatar(correct, 'xl')}</span>
           </div>
-        </div>`);
-    } else if (!session) {
-      parts.push(`<div class="g-system">No game yet. Send one from the chat.</div>`);
+          <h3 class="g-reveal-title">It was ${correct === viewerId() ? 'you' : escapeHtml(profileName(correct))}!</h3>
+          <p class="g-reveal-sub">${right}/${total} got it right</p>
+          ${quote ? `<p class="g-quote-chip">“${escapeHtml(quote)}”</p>` : ''}
+          ${
+            next
+              ? `<div class="g-divider"><span>Next up...</span></div>
+                 <div class="g-panel g-next">
+                   ${pill(next)}
+                   <p class="g-next-round">Round ${next.ordinal} of ${rounds.length}</p>
+                   <h3>${escapeHtml(cap(next.prompt))}</h3>
+                   <p class="g-hint">${hint(next)}</p>
+                 </div>`
+              : ''
+          }`,
+        foot: nextFoot(r, rounds, session),
+        key: `r:${r.id}`,
+      });
     }
 
-    const active = document.activeElement;
-    const typing = active?.classList?.contains('g-why-input')
-      ? { round: active.dataset.round, start: active.selectionStart, end: active.selectionEnd }
-      : focusWhy
-        ? { round: focusWhy, start: null, end: null }
-        : null;
-    focusWhy = null;
-    const prevTop = els.messages.scrollTop;
-    const nearBottom = els.messages.scrollHeight - els.messages.scrollTop - els.messages.clientHeight < 80;
-    els.messages.innerHTML = parts.join('');
-    els.messages.scrollTop = nearBottom ? els.messages.scrollHeight : prevTop;
-    shownCards = renderedCards;
-    if (typing) {
-      const input = els.messages.querySelector(`.g-why-input[data-round="${typing.round}"]`);
-      if (input) {
-        input.focus({ preventScroll: true });
-        const end = typing.end ?? input.value.length;
-        input.setSelectionRange(typing.start ?? end, end);
-      }
+    let groups;
+    if (isOpen(r)) {
+      const takes = [...results].sort((a, b) => (b.profile_id === winner) - (a.profile_id === winner));
+      groups = `
+          <div class="g-group tint t0">
+            <div class="g-group-head">
+              <span>Everyone's takes</span>
+              <b class="g-count-badge">${takes.length}</b>
+            </div>
+            <div class="g-group-rows">${takes.map((res) => saidRow(res, winner)).join('')}</div>
+          </div>`;
+    } else if (r.game_type === 'most_likely_to' && (r.options || []).some((o) => o.profile_id)) {
+      groups = (r.options || [])
+        .map((o) => ({ o, rows: results.filter((res) => res.choice === optionId(o)) }))
+        .filter((g) => g.rows.length)
+        .sort((a, b) => b.rows.length - a.rows.length)
+        .map(
+          ({ o, rows }, i) => `
+          <div class="g-group person ${i === 0 ? 'top' : ''}">
+            <div class="g-group-head">
+              <span class="g-group-who">${avatar(o.profile_id)}${escapeHtml(displayName(o.profile_id))}</span>
+              <b class="g-count-badge">${rows.length}</b>
+            </div>
+            <div class="g-group-rows">${rows.map((res) => saidRow(res, winner)).join('')}</div>
+          </div>`
+        )
+        .join('');
+    } else {
+      const scene = r.game_type === 'this_or_that';
+      groups = (r.options || [])
+        .map((o, i) => {
+          const rows = results.filter((res) => res.choice === optionId(o));
+          return `
+          <div class="g-group ${scene ? `scene s${i % 4}` : `tint t${i % 2}`}">
+            <div class="g-group-head">
+              <span>${escapeHtml(cap(o.label))}</span>
+              <b class="g-count-badge">${rows.length}</b>
+            </div>
+            <div class="g-group-rows">${rows.length ? rows.map((res) => saidRow(res, winner)).join('') : '<p class="g-empty">No votes</p>'}</div>
+          </div>`;
+        })
+        .join('');
     }
 
-    els.messages.querySelectorAll('.g-option:not([disabled])').forEach((btn) => {
-      btn.addEventListener('click', () => pickOption(btn.dataset.round, btn.dataset.value));
-    });
-    els.messages.querySelectorAll('.g-why-input').forEach((input) => {
-      const roundId = input.dataset.round;
-      const send = els.messages.querySelector(`.g-why-send[data-round="${roundId}"]`);
-      input.addEventListener('input', () => {
-        if (drafts[roundId]) drafts[roundId].why = input.value;
-        if (send) send.disabled = !input.value.trim();
-      });
-      input.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && input.value.trim()) sendDraft(roundId);
-      });
-    });
-    els.messages.querySelectorAll('.g-why-send').forEach((btn) => {
-      btn.addEventListener('click', () => sendDraft(btn.dataset.round));
+    paint({
+      subtitle: r.game_type === 'this_or_that' ? `Round ${r.ordinal} of ${rounds.length}` : `Round ${r.ordinal} Results`,
+      stepsHtml: r.game_type === 'this_or_that' ? steps(rounds, r) : '',
+      body: `
+        <div class="g-q">
+          ${pill(r)}
+          ${promptHtml(r)}
+          ${r.game_type === 'this_or_that' ? `<p class="g-hint">Here's what everyone said...</p>` : ''}
+        </div>
+        <div class="g-groups">${groups}</div>`,
+      foot: nextFoot(r, rounds, session),
+      key: `r:${r.id}`,
     });
   }
 
-  let focusWhy = null;
+  /* ----- final summary ----- */
 
-  function pickOption(roundId, value) {
-    const round = room.rounds.get(roundId);
-    if (round && needsWhy(round)) {
-      drafts[roundId] = { choice: value, why: drafts[roundId]?.why || '' };
-      focusWhy = roundId;
-      scheduleRender(true);
-      return;
-    }
-    submitPick(roundId, value);
+  function paintSummary(session, rounds) {
+    const board = scores(rounds);
+    const top = board[0];
+    const tie = board.length > 1 && board[1][1] === top?.[1];
+    const me = viewerId();
+    const title = !top ? 'Game over' : tie ? "It's a tie!" : top[0] === me ? 'You won!' : `${profileName(top[0])} wins!`;
+    paint({
+      subtitle: 'Final Results',
+      confetti: true,
+      body: `
+        ${
+          top
+            ? `<div class="g-winner">
+                 <span class="g-rays" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></span>
+                 ${ICONS.crown}
+                 <span class="g-ring">${avatar(top[0], 'xl')}</span>
+               </div>`
+            : ''
+        }
+        <h3 class="g-reveal-title">${escapeHtml(title)}</h3>
+        <p class="g-reveal-sub">${top ? `${top[1]} ${top[1] === 1 ? 'point' : 'points'} · ` : ''}${rounds.length} rounds</p>
+        <div class="g-board">${board
+          .map(
+            ([id, pts], i) => `
+            <div class="g-board-row ${i === 0 ? 'first' : ''}">
+              <span class="g-rank">${i + 1}</span>
+              ${avatar(id)}
+              <span class="g-board-name">${escapeHtml(displayName(id))}</span>
+              <span class="g-pts">${pts} ${pts === 1 ? 'pt' : 'pts'}</span>
+            </div>`
+          )
+          .join('')}</div>
+        <div class="g-recap">${rounds
+          .map(
+            (r) => `
+            <button type="button" class="g-recap-row" data-go="${escapeHtml(r.id)}">
+              ${pill(r)}<span>${escapeHtml(cap(r.prompt))}</span>
+            </button>`
+          )
+          .join('')}</div>`,
+      foot: `<button type="button" class="g-cta" data-act="again" ${playingAgain ? 'disabled' : ''}>${playingAgain ? busy('Writing your rounds…') : 'Play Again 🎮'}</button>`,
+      key: `s:${session.id}`,
+    });
   }
 
-  function sendDraft(roundId) {
+  /* ---------- answering ---------- */
+
+  function pick(roundId, value) {
+    const r = room.rounds.get(roundId);
+    if (!r || r.phase !== 'answering' || submitting.has(roundId)) return;
+    drafts[roundId] = { choice: value, why: drafts[roundId]?.why || '' };
+    scheduleRender(true);
+  }
+
+  async function submit(roundId) {
+    const r = room.rounds.get(roundId);
     const draft = drafts[roundId];
-    if (draft?.choice && draft.why.trim()) submitPick(roundId, draft.choice, draft.why.trim());
-  }
-
-  async function submitPick(roundId, value, why) {
-    if (submitting.has(roundId)) return;
+    const choice = r && answerFor(r);
+    if (!choice || submitting.has(roundId)) return;
+    const why = needsWhy(r) ? (draft?.why || '').trim() : undefined;
+    if (needsWhy(r) && !why) return;
     submitting.add(roundId);
     scheduleRender(true);
     try {
-      const res = await api.submitResponse(roundId, value, why);
-      myPicks[roundId] = value;
+      const res = await api.submitResponse(roundId, choice, why);
+      myPicks[roundId] = choice;
       delete drafts[roundId];
-      localStorage.setItem(`ig_games_picks:${api.playerSlot}`, JSON.stringify(myPicks));
+      localStorage.setItem(picksKey, JSON.stringify(myPicks));
       const stored = room.rounds.get(roundId);
       if (stored) {
         applyRow('rounds', {
@@ -780,68 +1081,83 @@
     }
   }
 
-  function updateHostBar(session, rounds) {
-    if (!els.hostBar) return;
-    const current = currentRound(session, rounds);
-    let html = '';
-
-    if (!session || session.status !== 'active') {
-      html = `<button type="button" class="g-btn primary" id="host-start">${
-        session ? 'Play again' : `Start ${CHAOS.title}`
-      }</button>`;
-    } else if (isHost() && session.mode !== 'async') {
-      if (current?.phase === 'answering') {
-        const answered = current.submitted_profile_ids?.length || 0;
-        const total = current.required_response_count || 0;
-        html = `<button type="button" class="g-btn primary" id="host-reveal" data-round="${current.id}" ${answered < total ? 'disabled' : ''}>Reveal (${answered}/${total})</button>`;
-      } else if (current?.phase === 'revealed') {
-        html = `<button type="button" class="g-btn primary" id="host-advance" data-round="${current.id}">Next round</button>`;
-      }
+  async function playAgain() {
+    if (playingAgain || !room.threadId) return;
+    playingAgain = true;
+    scheduleRender(true);
+    try {
+      const res = await api.sendGame(room.threadId, threadName());
+      if (res?.session) applyRow('game_sessions', res.session);
+      view = { roundId: null, summary: false };
+      ensureInviteBubble(room.threadId, { roomId: res.room.id, sessionId: res.session.id, mine: true });
+      await hydrate();
+    } catch (err) {
+      toast(err.message);
+    } finally {
+      playingAgain = false;
+      scheduleRender(true);
     }
-
-    const key = html || 'empty';
-    if (key === hostBarKey) return;
-    hostBarKey = key;
-    els.hostBar.innerHTML = html;
-    els.hostBar.classList.toggle('visible', !!html);
-
-    const run = (id, fn) =>
-      document.getElementById(id)?.addEventListener('click', async (e) => {
-        e.currentTarget.disabled = true;
-        if (id === 'host-start') e.currentTarget.textContent = 'The AI is writing your rounds…';
-        try {
-          const res = await fn(e.currentTarget.dataset.round);
-          if (res?.room) applyRow('rooms', res.room);
-          if (res?.session) applyRow('game_sessions', res.session);
-          if (res?.current_round) applyRow('rounds', res.current_round);
-          if (res?.id && res?.phase) applyRow('rounds', res);
-          scheduleRender(true);
-        } catch (err) {
-          hostBarKey = '';
-          if (err.status === 409) hydrate();
-          else scheduleRender(true);
-          toast(err.message);
-        }
-      });
-    run('host-start', () => api.sendGame(room.threadId, threadName()));
-    run('host-reveal', (roundId) => api.reveal(roundId));
-    run('host-advance', (roundId) => api.advance(roundId));
   }
 
-  /* ---------- play mode ---------- */
+  els.play?.addEventListener('click', (e) => {
+    const el = e.target.closest('button');
+    if (!el || el.disabled || !els.play.contains(el)) return;
+    const session = currentSession();
+    const rounds = sessionRounds(session);
+    if (el.dataset.act === 'close') return exitPlayMode();
+    if (el.dataset.act === 'more') return toast('Chaos · AI-made rounds for your group');
+    if (el.dataset.pick) return pick(view.roundId, el.dataset.pick);
+    if (el.dataset.act === 'submit') return submit(el.dataset.round);
+    if (el.dataset.act === 'again') return playAgain();
+    if (el.dataset.act === 'next') {
+      const r = rounds.find((x) => x.id === el.dataset.round);
+      if (r) goNext(r, rounds, session);
+      return;
+    }
+    const jump = el.dataset.go || (el.classList.contains('g-step') && el.dataset.round);
+    if (jump) {
+      view = { roundId: jump, summary: false };
+      scheduleRender(true);
+    }
+  });
 
-  async function enterPlayMode(roomId, threadId) {
-    if (!roomId) throw new Error('Could not find this chat’s game. Reopen the chat and try again.');
+  els.play?.addEventListener('input', (e) => {
+    const input = e.target.closest('.g-why-input');
+    if (!input) return;
+    const roundId = input.dataset.round;
+    drafts[roundId] = { ...(drafts[roundId] || {}), why: input.value };
+    const counter = input.parentElement.querySelector('.g-count');
+    if (counter) counter.textContent = `${input.value.length}/${WHY_MAX}`;
+    const r = room.rounds.get(roundId);
+    const btn = els.play.querySelector('[data-act="submit"]');
+    if (btn && r) btn.disabled = !canSubmit(r);
+  });
+
+  els.play?.addEventListener('keydown', (e) => {
+    const input = e.target.closest('.g-why-input');
+    if (input && e.key === 'Enter') {
+      const r = room.rounds.get(input.dataset.round);
+      if (r && canSubmit(r)) submit(r.id);
+    }
+  });
+
+  /* ---------- play mode (full-screen game over the chat) ---------- */
+
+  function enterPlayMode(roomId, threadId) {
+    if (!roomId) {
+      toast('Could not find this chat’s game. Reopen the chat and try again.');
+      return;
+    }
     if (room.playing) exitPlayMode(false);
     room = emptyRoom();
     room.id = roomId;
     room.threadId = threadId;
     room.playing = true;
     renderKey = '';
-    hostBarKey = '';
-    shownCards = new Set();
-    window.DMChat?.setMessagesContainerMode('game');
-    els.messages.innerHTML = `<div class="g-system">Connecting…</div>`;
+    view = { roundId: null, summary: false };
+    closeTray();
+    els.play.classList.remove('hidden');
+    paintLoading();
     connect(roomId);
   }
 
@@ -850,28 +1166,30 @@
     clearTimeout(room.retryTimer);
     room = emptyRoom();
     renderKey = '';
-    hostBarKey = '';
-    shownCards = new Set();
-    els.hostBar?.classList.remove('visible');
-    if (els.hostBar) els.hostBar.innerHTML = '';
-    window.DMChat?.setMessagesContainerMode('chat');
-    if (refreshChat) {
-      window.DMChat?.refresh();
-      if (thread.id) syncInvites(thread.id).catch(() => {});
-    }
+    screenKey = '';
+    els.play?.classList.add('hidden');
+    if (els.play) els.play.innerHTML = '';
+    if (refreshChat && thread.id) syncInvites(thread.id).catch(() => {});
   }
 
   /* ---------- wiring ---------- */
 
-  els.gamesBtn?.addEventListener('click', () => openGamePicker());
+  els.gamesBtn?.addEventListener('click', () => toggleTray());
+  els.trayGames?.addEventListener('click', () => {
+    closeTray();
+    openChaosSheet();
+  });
+  els.messages?.addEventListener('click', (e) => {
+    if (!e.target.closest('.gp-invite')) closeTray();
+  });
+  els.input?.addEventListener('focus', closeTray);
 
   document.addEventListener('dm:play-game', async () => {
     const threadId = window.DMChat?.getActiveThreadId();
     if (!threadId) return;
     try {
       if (!(await ensureReady())) return;
-      const roomId = await joinThread(threadId);
-      await enterPlayMode(roomId, threadId);
+      await openLobby(threadId, await joinThread(threadId));
     } catch (err) {
       toast(err.message);
     }
@@ -879,6 +1197,8 @@
 
   document.addEventListener('dm:thread-open', async (e) => {
     if (room.playing) exitPlayMode(false);
+    closeTray();
+    closeSheet();
     const threadId = e.detail?.threadId;
     if (thread.id !== threadId) leaveThread();
     if (!threadId) return;
@@ -894,7 +1214,9 @@
   });
 
   document.addEventListener('dm:thread-close', () => {
-    if (room.playing) exitPlayMode();
+    if (room.playing) exitPlayMode(false);
+    closeTray();
+    closeSheet();
     leaveThread();
   });
 
@@ -912,28 +1234,6 @@
       if (room.playing) {
         e.stopImmediatePropagation();
         exitPlayMode();
-      }
-    },
-    true
-  );
-
-  els.composer?.addEventListener(
-    'submit',
-    async (e) => {
-      if (!room.playing || !room.id) return;
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      const text = els.input.value.trim();
-      if (!text) return;
-      try {
-        const ev = await api.sendMessage(room.id, text);
-        els.input.value = '';
-        els.sendBtn?.classList.add('hidden');
-        els.rightIcons?.classList.remove('typing');
-        if (ev?.id) applyRow('timeline_events', ev);
-        scheduleRender();
-      } catch (err) {
-        toast(err.message);
       }
     },
     true

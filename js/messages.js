@@ -244,13 +244,13 @@
         <div class="dm-row ${side}">
           <button type="button" class="gp-invite" data-room="${escapeHtml(msg.roomId || '')}" data-host="${msg.isHost ? '1' : '0'}">
             <div class="gp-invite-art" aria-hidden="true">
-              <span class="gp-die">🎲</span>
+              <img src="./images/chaos-logo-blue.svg" alt="">
             </div>
             <div class="gp-invite-meta">
               <strong>${escapeHtml(msg.title || 'Chaos')}</strong>
               <span>${escapeHtml(msg.subtitle || 'Tap to play')}</span>
             </div>
-            <span class="gp-play">${msg.joined ? 'Open' : 'Play'}</span>
+            <span class="gp-play">${escapeHtml(msg.action || 'Play')}</span>
           </button>
         </div>`;
     }

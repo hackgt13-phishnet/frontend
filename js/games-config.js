@@ -7,4 +7,13 @@ window.GAMES_CONFIG = {
   // Phones are dealt one of these at random. Other rows in `profiles` (e.g. teammates'
   // test copies) are never handed out.
   demoPlayers: ['Ana', 'Dev', 'Kofi', 'Maya', 'Riya', 'Sam'],
+  // Demo profiles have no photos in the DB; the games UI shows these faces instead.
+  avatars: {
+    Ana: 'https://i.pravatar.cc/150?img=45',
+    Dev: 'https://i.pravatar.cc/150?img=12',
+    Kofi: 'https://i.pravatar.cc/150?img=60',
+    Maya: 'https://i.pravatar.cc/150?img=44',
+    Riya: 'https://i.pravatar.cc/150?img=49',
+    Sam: 'https://i.pravatar.cc/150?img=14',
+  },
 };

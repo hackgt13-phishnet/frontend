@@ -188,29 +188,48 @@
               </div>
             </header>
             <div class="dm-chat-messages" id="chat-messages"></div>
-            <div class="g-host-bar" id="g-host-bar"></div>
             <form class="dm-composer" id="dm-composer" autocomplete="off">
               <div class="dm-composer-bar">
-                <button type="button" class="composer-icon" title="Emoji"><img src="./images/emoji.svg" alt=""></button>
+                <button type="button" class="composer-camera" title="Camera" aria-label="Camera">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M4 8.5A2.5 2.5 0 0 1 6.5 6h1.3l1.2-1.8c.3-.5.8-.7 1.3-.7h3.4c.5 0 1 .2 1.3.7L16.2 6h1.3A2.5 2.5 0 0 1 20 8.5v8a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 16.5z" stroke="#fff" stroke-width="1.9" stroke-linejoin="round"/>
+                    <circle cx="12" cy="12.5" r="3.3" stroke="#fff" stroke-width="1.9"/>
+                  </svg>
+                </button>
                 <input type="text" id="composer-input" placeholder="Message..." aria-label="Message">
                 <div class="composer-right">
-                  <button type="button" class="composer-icon" id="composer-games" title="Games" aria-label="Send a game">
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                      <rect x="3" y="7" width="18" height="12" rx="3" stroke="currentColor" stroke-width="1.8"/>
-                      <circle cx="8.5" cy="13" r="1.2" fill="currentColor"/>
-                      <path d="M8.5 10.2v5.6M5.7 13h5.6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
-                      <circle cx="15.2" cy="11.2" r="1.15" fill="currentColor"/>
-                      <circle cx="17.6" cy="14.2" r="1.15" fill="currentColor"/>
-                    </svg>
-                  </button>
                   <button type="button" class="composer-icon" title="Voice message"><img src="./images/mic.svg" alt=""></button>
                   <button type="button" class="composer-icon" title="Add photo"><img src="./images/gallery.svg" alt=""></button>
                   <button type="button" class="composer-icon" title="Sticker"><img src="./images/sticker.svg" alt=""></button>
+                  <button type="button" class="composer-icon" id="composer-games" title="Games" aria-label="Games">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                      <rect x="2.5" y="6.5" width="19" height="12" rx="4.5" stroke="currentColor" stroke-width="1.8"/>
+                      <path d="M7.8 10.3v4.4M5.6 12.5H10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                      <circle cx="15.6" cy="11.2" r="1.15" fill="currentColor"/>
+                      <circle cx="17.9" cy="13.8" r="1.15" fill="currentColor"/>
+                    </svg>
+                  </button>
                   <button type="submit" class="composer-send hidden" id="composer-send">Send</button>
                 </div>
               </div>
             </form>
+            <div class="g-tray hidden" id="g-tray" aria-label="Share">
+              <span class="g-tray-grip" aria-hidden="true"></span>
+              <div class="g-tray-grid">
+                <button type="button" class="g-tray-item"><span class="g-tray-icon"><svg viewBox="0 0 24 24"><path d="M4 8.5A2.5 2.5 0 0 1 6.5 6h1.3l1.2-1.8c.3-.5.8-.7 1.3-.7h3.4c.5 0 1 .2 1.3.7L16.2 6h1.3A2.5 2.5 0 0 1 20 8.5v8a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 16.5z"/><circle cx="12" cy="12.5" r="3.3"/></svg></span>Camera</button>
+                <button type="button" class="g-tray-item"><span class="g-tray-icon"><svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="9" cy="9.5" r="1.6"/><path d="m5 17 4.5-4.5 3 3 2.5-2.5L19 17"/></svg></span>Photos</button>
+                <button type="button" class="g-tray-item"><span class="g-tray-icon"><svg viewBox="0 0 24 24"><path d="M20 12.5V7a3 3 0 0 0-3-3H7a3 3 0 0 0-3 3v10a3 3 0 0 0 3 3h5.5z"/><path d="M12.5 20v-4.5a3 3 0 0 1 3-3H20"/><path d="M9 10h.01M15 10h.01"/></svg></span>Stickers</button>
+                <button type="button" class="g-tray-item"><span class="g-tray-icon"><svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="3"/><text x="12" y="15" text-anchor="middle" font-size="6.5" font-weight="700" font-family="-apple-system, Helvetica, Arial" fill="currentColor" stroke="none">GIF</text></svg></span>GIFs</button>
+                <button type="button" class="g-tray-item games" id="g-tray-games"><span class="g-tray-icon"><svg viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="11" rx="4"/><path d="M8 10.5v4M6 12.5h4"/><path d="M15.5 11.5h.01M17.5 13.5h.01"/></svg></span>Games</button>
+                <button type="button" class="g-tray-item"><span class="g-tray-icon"><svg viewBox="0 0 24 24"><path d="M5 7h14M5 12h9M5 17h11"/></svg></span>Poll</button>
+                <button type="button" class="g-tray-item"><span class="g-tray-icon"><svg viewBox="0 0 24 24"><path d="M4 15v-3a8 8 0 0 1 16 0v3"/><rect x="3.5" y="14" width="4" height="6" rx="1.5"/><rect x="16.5" y="14" width="4" height="6" rx="1.5"/></svg></span>Music</button>
+                <button type="button" class="g-tray-item"><span class="g-tray-icon"><svg viewBox="0 0 24 24"><path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/></svg></span>Location</button>
+              </div>
+            </div>
           </section>
+
+          <div class="g-play hidden" id="g-play" role="dialog" aria-modal="true" aria-label="Chaos"></div>
+          <div class="g-toast" id="g-toast" role="status" aria-live="polite"></div>
         </div>
 
         <nav class="m-tabbar" id="m-tabbar" aria-label="Primary">

@@ -57,8 +57,10 @@
       try {
         await send('/demo-sessions', { method: 'POST', body: JSON.stringify({ profile_id: saved.id }) });
       } catch {
+        // Our profile sat idle and another phone took it; the UI deals us a new one.
         writeJSON('ig_games_profile', null);
-        throw new ApiError(403, 'Your player was reset. Reload the page to get a new one.');
+        global.dispatchEvent(new CustomEvent('games:profile-lost'));
+        throw new ApiError(403, 'Your player was reset. Try again to get a new one.');
       }
       return request(path, options, true);
     }
