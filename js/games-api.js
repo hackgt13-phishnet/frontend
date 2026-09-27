@@ -151,18 +151,6 @@
     return () => supabase().removeChannel(channel);
   }
 
-  function watchThreadMessages(roomId, onMessage, onStatus) {
-    const channel = supabase()
-      .channel(`messages:${roomId}`)
-      .on(
-        'postgres_changes',
-        { schema: 'public', table: 'timeline_events', event: 'INSERT', filter: `room_id=eq.${roomId}` },
-        (payload) => onMessage(payload.new)
-      )
-      .subscribe((status) => onStatus?.(status));
-    return () => supabase().removeChannel(channel);
-  }
-
   global.GamesAPI = {
     ApiError,
     playerSlot,
@@ -205,6 +193,5 @@
     advance: (roundId) => post(`/rounds/${roundId}/advance`),
     subscribeRoom,
     watchThreadGames,
-    watchThreadMessages,
   };
 })(window);
