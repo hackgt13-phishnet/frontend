@@ -181,7 +181,8 @@
         game_type: 'who_sent_this',
         mode: 'async',
       }),
-    hydrate: (roomId) => request(`/rooms/${roomId}`),
+    hydrate: (roomId, sessionId) =>
+      request(`/rooms/${roomId}${sessionId ? `?session_id=${encodeURIComponent(sessionId)}` : ''}`),
     timeline: (roomId, before) =>
       request(`/rooms/${roomId}/timeline${before ? `?before=${encodeURIComponent(before)}` : ''}`),
     sendMessage: (roomId, body) => post(`/rooms/${roomId}/messages`, { body }),

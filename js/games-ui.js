@@ -60,6 +60,8 @@
     return {
       id: null,
       threadId: null,
+      // Set when a card for a specific game was tapped; otherwise play mode follows the newest game.
+      sessionId: null,
       playing: false,
       hydrated: false,
       hydrateSeq: 0,
@@ -262,8 +264,11 @@
     if (!dm || !e?.id) return;
     const p = e.payload || {};
     const me = ready.profile?.id;
-    if (e.event_type === 'message' && p.body) {
-      const mine = e.actor_profile_id === me;
+    // A person's message always has its sender; the game master's lines are written by the server
+    // with no sender. Keeping both rules strict means a player can never show up as the game master.
+    const person = e.actor_profile_id;
+    if (e.event_type === 'message' && p.body && person) {
+      const mine = Boolean(me) && person === me;
       dm.appendMessage({
         eventId: e.id,
         type: mine ? 'out' : 'in',
@@ -272,10 +277,10 @@
         avatar: !mine,
         avatarUrl: mine ? null : avatarUrl(e.actor_profile_id),
       });
-    } else if ((e.event_type === 'host_line' || e.event_type === 'game_recap') && p.text) {
+    } else if ((e.event_type === 'host_line' || e.event_type === 'game_recap') && p.text && !person) {
       dm.appendMessage({ eventId: e.id, type: 'gm', text: p.text });
     } else if (e.event_type === 'game_reveal' && p.reveal) {
-      dm.appendMessage({ eventId: e.id, type: 'gm-result', roomId: e.room_id, roundId: p.id, ...resultCard(p) });
+      dm.appendMessage({ eventId: e.id, type: 'gm-result', roomId: e.room_id, roundId: p.id, sessionId: p.session_id, ...resultCard(p) });
     } else if (e.event_type === 'game_prompt' && p.ordinal > 1) {
       dm.appendMessage({ eventId: e.id, type: 'sys', text: `Round ${p.ordinal} is open` });
       syncInvites(thread.id).catch(() => {});
@@ -434,10 +439,10 @@
     }
   }
 
-  async function openLobby(threadId, roomId) {
+  async function openLobby(threadId, roomId, sessionId = null) {
     let snap;
     try {
-      snap = await api.hydrate(roomId);
+      snap = await api.hydrate(roomId, sessionId);
     } catch (err) {
       closeSheet();
       toast(err.message);
@@ -472,7 +477,7 @@
     );
     document.getElementById('g-start').addEventListener('click', () => {
       closeSheet();
-      enterPlayMode(roomId, threadId);
+      enterPlayMode(roomId, threadId, sessionId);
     });
   }
 
@@ -494,6 +499,7 @@
       if (newer(row, room.rounds.get(row.id))) room.rounds.set(row.id, { ...room.rounds.get(row.id), ...row });
     } else if (table === 'timeline_events') {
       const p = row.payload || {};
+      if (row.actor_profile_id) return;
       if (row.event_type === 'host_line' && p.round_id && p.text) room.hostLines.set(p.round_id, p);
       else if (row.event_type === 'game_recap' && p.session_id && p.text) room.recaps.set(p.session_id, p);
     }
@@ -533,7 +539,7 @@
     const roomId = room.id;
     let snap;
     try {
-      snap = await api.hydrate(roomId);
+      snap = await api.hydrate(roomId, room.sessionId);
     } catch (err) {
       if (seq !== room.hydrateSeq || roomId !== room.id) return;
       // 4xx won't fix itself on retry; only network/5xx/timeouts should reconnect.
@@ -568,6 +574,7 @@
   /* ---------- derived state ---------- */
 
   function currentSession() {
+    if (room.sessionId) return room.sessions.get(room.sessionId) || null;
     let best = null;
     for (const s of room.sessions.values()) {
       if (!best) best = s;
@@ -1210,6 +1217,7 @@
     try {
       const res = await api.sendGame(room.threadId, threadName());
       if (res?.session) applyRow('game_sessions', res.session);
+      room.sessionId = null;
       view = { roundId: null, summary: false };
       ensureInviteBubble(room.threadId, { roomId: res.room.id, sessionId: res.session.id, mine: true });
       await hydrate();
@@ -1269,7 +1277,7 @@
 
   /* ---------- play mode (full-screen game over the chat) ---------- */
 
-  function enterPlayMode(roomId, threadId) {
+  function enterPlayMode(roomId, threadId, sessionId = null) {
     if (!roomId) {
       toast('Could not find this chat’s game. Reopen the chat and try again.');
       return;
@@ -1278,6 +1286,7 @@
     room = emptyRoom();
     room.id = roomId;
     room.threadId = threadId;
+    room.sessionId = sessionId;
     room.playing = true;
     renderKey = '';
     view = { roundId: null, summary: false };
@@ -1317,12 +1326,13 @@
       if (!(await ensureReady())) return;
       const roomId = await joinThread(threadId);
       // A result card in the chat opens straight to that round's results.
+      const sessionId = e.detail?.sessionId || null;
       if (e.detail?.roundId) {
-        enterPlayMode(roomId, threadId);
+        enterPlayMode(roomId, threadId, sessionId);
         view = { roundId: e.detail.roundId, summary: false };
         return;
       }
-      await openLobby(threadId, roomId);
+      await openLobby(threadId, roomId, sessionId);
     } catch (err) {
       toast(err.message);
     }

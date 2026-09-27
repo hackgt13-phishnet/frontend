@@ -325,6 +325,7 @@
               threadId: activeId,
               roomId: btn.dataset.room,
               roundId: btn.dataset.round || null,
+              sessionId: btn.dataset.session || null,
               isHost: btn.dataset.host === '1',
             },
           })
@@ -387,7 +388,7 @@
     if (msg.type === 'gm-result') {
       return `
         <div class="dm-row gm-result-row">
-          <button type="button" class="gm-result" data-room="${escapeHtml(msg.roomId || '')}" data-round="${escapeHtml(msg.roundId || '')}">
+          <button type="button" class="gm-result" data-room="${escapeHtml(msg.roomId || '')}" data-round="${escapeHtml(msg.roundId || '')}" data-session="${escapeHtml(msg.sessionId || '')}">
             <span class="gm-result-label">${escapeHtml(msg.label)}</span>
             <strong>${escapeHtml(msg.title)}</strong>
             ${msg.sub ? `<span class="gm-result-sub">${escapeHtml(msg.sub)}</span>` : ''}
@@ -403,7 +404,7 @@
       const side = msg.from === 'in' ? 'in' : 'out';
       return `
         <div class="dm-row ${side}">
-          <button type="button" class="gp-invite ${msg.action === 'Play' ? 'm-ready' : ''}" data-room="${escapeHtml(msg.roomId || '')}" data-host="${msg.isHost ? '1' : '0'}">
+          <button type="button" class="gp-invite ${msg.action === 'Play' ? 'm-ready' : ''}" data-room="${escapeHtml(msg.roomId || '')}" data-session="${escapeHtml(msg.sessionId || '')}" data-host="${msg.isHost ? '1' : '0'}">
             <div class="gp-invite-art" aria-hidden="true">
               <img src="./images/chaos-logo-blue.svg" alt="">
             </div>
