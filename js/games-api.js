@@ -2,8 +2,10 @@
 (function (global) {
   const cfg = () => global.GAMES_CONFIG;
 
-  // ?player=2 gives a tab its own persistent identity so one browser can play both sides.
-  const playerSlot = new URLSearchParams(location.search).get('player') || '1';
+  // ?as=Kofi plays as Kofi; each name keeps its own login, so one browser can hold several players.
+  // (?player=2 still works: a numbered tab that gets whoever is free.)
+  const params = new URLSearchParams(location.search);
+  const playerSlot = (params.get('as') || '').toLowerCase() || params.get('player') || '1';
   const storageKey = (name) => `${name}:${playerSlot}`;
 
   let client = null;

@@ -193,6 +193,23 @@
 
     const allowed = config.demoPlayers;
     const saved = api.savedProfile();
+
+    const wanted = new URLSearchParams(location.search).get('as');
+    if (wanted) {
+      const profile = ready.profiles.find((p) => p.display_name.toLowerCase() === wanted.toLowerCase());
+      if (!profile) throw new Error(`No player named “${wanted}”. Try one of: ${(allowed || []).join(', ')}.`);
+      if (!(saved && saved.userId === userId && saved.id === profile.id)) await api.releaseProfile();
+      try {
+        await api.chooseProfile(profile.id);
+      } catch (err) {
+        if (err.status !== 409) throw err;
+        throw new Error(`${profile.display_name} is open in another tab. Close it, or wait 15 minutes for it to free up.`);
+      }
+      ready.profile = { ...profile, userId };
+      api.setSavedProfile(ready.profile);
+      return true;
+    }
+
     if (saved && saved.userId === userId && (!allowed?.length || allowed.includes(saved.display_name))) {
       try {
         await api.chooseProfile(saved.id);
@@ -1442,6 +1459,10 @@
         window.DMChat.me = ready.profile?.display_name;
         window.DMChat.refresh();
       }
+      // Always show who this tab is playing as.
+      const status = document.getElementById('chat-status');
+      const members = window.DMChat?.getActiveThread()?.status || '';
+      if (status && ready.profile) status.textContent = `${members}${members ? ' · ' : ''}you're ${ready.profile.display_name}`;
       await joinThread(threadId);
       await loadChat(threadId);
       await syncInvites(threadId);
