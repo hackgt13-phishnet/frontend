@@ -183,6 +183,7 @@
       }),
     hydrate: (roomId, sessionId) =>
       request(`/rooms/${roomId}${sessionId ? `?session_id=${encodeURIComponent(sessionId)}` : ''}`),
+    sources: (roundId) => request(`/rounds/${roundId}/sources`),
     timeline: (roomId, before) =>
       request(`/rooms/${roomId}/timeline${before ? `?before=${encodeURIComponent(before)}` : ''}`),
     sendMessage: (roomId, body) => post(`/rooms/${roomId}/messages`, { body }),

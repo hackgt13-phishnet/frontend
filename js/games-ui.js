@@ -766,6 +766,7 @@
     const changed = key !== screenKey;
     screenKey = key;
     window.GameMotion?.painted(els.play, { key, changed, mood });
+    fillSources();
     if (typing) {
       const input = els.play.querySelector(`.g-why-input[data-round="${typing.round}"]`);
       if (input) {
@@ -868,6 +869,88 @@
     return r.game_type === 'most_likely_to' ? 'Submit Vote' : 'Submit Answer';
   }
 
+  /* ----- where a round came from: the exact messages and posts behind it ----- */
+
+  const sourceCache = new Map();
+  const KIND = { message: 'message', reel: 'reel', photo: 'photo', post: 'post', story: 'story', saved: 'save', like: 'like', liked: 'like' };
+  const kindWord = (k) => KIND[k] || k || 'item';
+  const shortDate = (iso) =>
+    iso ? new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
+
+  // A placeholder the painter fills once the sources load (and instantly from cache on repaints).
+  const srcBox = (r, open = false) =>
+    `<div class="g-src ${open ? 'open' : ''}" data-src="${escapeHtml(r.id)}" data-open="${open ? 1 : 0}"></div>`;
+
+  function srcHtml(data, open) {
+    const items = data.items || [];
+    if (!items.length) return '';
+    const counts = {};
+    for (const it of items) counts[kindWord(it.kind)] = (counts[kindWord(it.kind)] || 0) + 1;
+    const summary = Object.entries(counts)
+      .map(([k, n]) => `${n} ${n > 1 ? (k === 'story' ? 'stories' : `${k}s`) : k}`)
+      .join(' + ');
+    const rows = items
+      .map((it) => {
+        const where = it.author ? `${escapeHtml(it.author)}'s ${kindWord(it.kind)}` : escapeHtml(it.where || kindWord(it.kind));
+        const text = it.private
+          ? `<em>A private ${kindWord(it.kind)}: only its topic was used, never quoted</em>`
+          : it.text
+            ? `“${escapeHtml(it.text)}”`
+            : '<em>photo</em>';
+        return `
+          <li>
+            ${it.media_url && !it.private ? `<img src="${escapeHtml(it.media_url)}" alt="">` : ''}
+            <div><span>${where}${it.when ? ` · ${shortDate(it.when)}` : ''}</span><p>${text}</p></div>
+          </li>`;
+      })
+      .join('');
+    const m = data.moment;
+    const moment = m
+      ? `<p class="g-src-moment">Part of the moment “${escapeHtml(m.moment)}” · ${m.messages} messages${
+          m.people?.length ? ` · ${escapeHtml(m.people.join(', '))} were in it` : ''
+        }</p>`
+      : '';
+    return `
+      <button type="button" class="g-src-chip" data-src-toggle>
+        <span class="g-src-mark">✦</span>Made from ${summary}
+        <span class="g-src-caret">${open ? '▴' : '▾'}</span>
+      </button>
+      <div class="g-src-body"><ul>${rows}</ul>${moment}</div>`;
+  }
+
+  function fillSources() {
+    els.play.querySelectorAll('[data-src]').forEach((el) => {
+      const r = room.rounds.get(el.dataset.src);
+      if (!r) return;
+      const key = `${r.id}:${isRevealed(r)}`;
+      const open = el.classList.contains('open');
+      const cached = sourceCache.get(key);
+      if (cached) {
+        el.innerHTML = srcHtml(cached, open);
+        return;
+      }
+      if (cached === null) return;
+      sourceCache.set(key, null);
+      api
+        .sources(r.id)
+        .then((data) => {
+          sourceCache.set(key, data);
+          const live = els.play.querySelector(`[data-src="${CSS.escape(r.id)}"]`);
+          if (live) live.innerHTML = srcHtml(data, live.classList.contains('open'));
+        })
+        .catch(() => sourceCache.delete(key));
+    });
+  }
+
+  els.play?.addEventListener('click', (e) => {
+    const t = e.target.closest('[data-src-toggle]');
+    if (!t) return;
+    const box = t.closest('.g-src');
+    box.classList.toggle('open');
+    const caret = box.querySelector('.g-src-caret');
+    if (caret) caret.textContent = box.classList.contains('open') ? '▴' : '▾';
+  });
+
   function paintQuestion(r, rounds) {
     const draft = drafts[r.id] || {};
     const choice = draft.choice;
@@ -875,6 +958,7 @@
     if (r.game_type === 'who_sent_this') {
       body = `
         ${postCard(r)}
+        ${srcBox(r)}
         <h4 class="g-ask">${escapeHtml(cap(r.prompt || 'Who posted this?'))}</h4>
         ${peopleChoices(r, choice)}`;
     } else {
@@ -883,6 +967,7 @@
           ${pill(r)}
           ${promptHtml(r)}
           <p class="g-hint">${hint(r)}</p>
+          ${srcBox(r)}
         </div>`;
       let options;
       if (isOpen(r)) {
@@ -950,6 +1035,7 @@
           ${promptHtml(r)}
         </div>
         ${r.game_type === 'who_sent_this' && (r.media?.quote || r.media?.caption) ? `<p class="g-quote-chip">“${escapeHtml(r.media.quote || r.media.caption)}”</p>` : ''}
+        ${srcBox(r)}
         <div class="g-panel g-answered">
           <p class="g-answered-title">${done.length}/${players.length} have answered</p>
           <div class="g-people static">${players
@@ -1041,6 +1127,7 @@
           <h3 class="g-reveal-title">It was ${correct === viewerId() ? 'you' : escapeHtml(profileName(correct))}!</h3>
           <p class="g-reveal-sub">${right}/${total} got it right</p>
           ${quote ? `<p class="g-quote-chip">“${escapeHtml(quote)}”</p>` : ''}
+          ${srcBox(r, true)}
           ${
             next
               ? `<div class="g-divider"><span>Next up...</span></div>
@@ -1111,7 +1198,8 @@
           ${promptHtml(r)}
           ${r.game_type === 'this_or_that' ? `<p class="g-hint">Here's what everyone said...</p>` : ''}
         </div>
-        <div class="g-groups">${groups}</div>`,
+        <div class="g-groups">${groups}</div>
+        ${srcBox(r, true)}`,
       foot: nextFoot(r, rounds, session),
       key: `r:${r.id}`,
       mood,
