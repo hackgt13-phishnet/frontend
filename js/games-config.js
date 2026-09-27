@@ -15,5 +15,9 @@ window.GAMES_CONFIG = {
     Maya: 'https://i.pravatar.cc/150?img=44',
     Riya: 'https://i.pravatar.cc/150?img=49',
     Sam: 'https://i.pravatar.cc/150?img=14',
+    Roshan: 'https://i.pravatar.cc/150?img=8',
+    Ayaan: 'https://i.pravatar.cc/150?img=15',
+    Kabir: 'https://i.pravatar.cc/150?img=25',
+    Shrey: 'https://i.pravatar.cc/150?img=32',
   },
 };

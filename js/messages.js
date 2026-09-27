@@ -24,21 +24,28 @@
     'roshan-group': {
       name: 'Roshan Ram and Shrey Desai',
       status: 'Roshan Ram is active',
+      cast: ['Roshan', 'Shrey'],
+      avatarsByName: {
+        Roshan: 'https://i.pravatar.cc/150?img=8',
+        Shrey: 'https://i.pravatar.cc/150?img=32',
+      },
       avatars: [
-        'https://i.pravatar.cc/150?img=20',
+        'https://i.pravatar.cc/150?img=8',
         'https://i.pravatar.cc/150?img=32',
       ],
       messages: [
         { type: 'time', text: 'Today, 11:04 AM' },
         {
           type: 'out-media',
+          name: 'Roshan',
           media: 'https://images.unsplash.com/photo-1635805737707-575885ab0820?w=600&h=900&fit=crop',
           caption: 'this edit goes crazy',
         },
         {
           type: 'out-media',
+          name: 'Roshan',
           media: 'https://images.unsplash.com/photo-1556157382-97eda2d62296?w=600&h=900&fit=crop',
-          seenBy: 'Seen by Roshan Ram',
+          seenBy: 'Seen by Shrey Desai',
         },
       ],
     },
@@ -93,6 +100,12 @@
     'group-shourya': {
       name: 'Anyone but Shourya',
       status: 'Active 3h ago',
+      cast: ['Roshan', 'Ayaan', 'Kabir'],
+      avatarsByName: {
+        Roshan: 'https://i.pravatar.cc/150?img=8',
+        Ayaan: 'https://i.pravatar.cc/150?img=15',
+        Kabir: 'https://i.pravatar.cc/150?img=25',
+      },
       avatars: [
         'https://i.pravatar.cc/150?img=15',
         'https://i.pravatar.cc/150?img=25',
@@ -100,7 +113,7 @@
       messages: [
         { type: 'time', text: 'Today, 9:01 AM' },
         { type: 'in', text: 'Who is bringing snacks?', avatar: true, name: 'Ayaan' },
-        { type: 'out', text: 'I got chips' },
+        { type: 'out', text: 'I got chips', name: 'Roshan' },
         { type: 'in', text: 'Legend', avatar: true, name: 'Kabir' },
       ],
     },
@@ -155,7 +168,9 @@
     });
 
     nameEl.textContent = data.name;
-    statusEl.textContent = data.status;
+    const mine = myCastName(data);
+    const others = (data.cast || []).filter((name) => name !== mine);
+    statusEl.textContent = others.length ? `With ${others.join(', ')}` : data.status;
     avatarsEl.className =
       'dm-chat-avatars' + (data.avatars.length > 1 ? ' stacked' : '');
     avatarsEl.innerHTML = data.avatars
@@ -179,6 +194,25 @@
     document.dispatchEvent(
       new CustomEvent('dm:thread-close', { detail: { threadId: prev } })
     );
+  }
+
+  function myCastName(data) {
+    const cast = (data || threads[activeId] || {}).cast;
+    if (!cast?.length) return null;
+    const slot = parseInt(new URLSearchParams(location.search).get('player') || '1', 10) || 1;
+    return cast[Math.max(0, slot - 1)] || cast[0];
+  }
+
+  function messageSide(msg) {
+    const mine = myCastName();
+    if (msg.name && mine) return msg.name === mine ? 'out' : 'in';
+    if (msg.type === 'out' || msg.type === 'out-media' || msg.from === 'out') return 'out';
+    return 'in';
+  }
+
+  function senderAvatar(name) {
+    const data = threads[activeId];
+    return (name && data.avatarsByName?.[name]) || data.avatars[0];
   }
 
   function renderMessages(list) {
@@ -215,8 +249,9 @@
     }
 
     if (msg.type === 'out-media') {
+      const side = messageSide(msg);
       return `
-        <div class="dm-row out">
+        <div class="dm-row ${side}">
           <div class="dm-media-wrap">
             <div class="dm-media-actions">
               <button type="button" title="More">⋯</button>
@@ -255,12 +290,10 @@
         </div>`;
     }
 
-    const side = msg.type === 'out' ? 'out' : 'in';
+    const side = messageSide(msg);
     const avatar =
       side === 'in' && msg.avatar
-        ? `<img class="dm-msg-avatar" src="${
-            threads[activeId].avatars[0]
-          }" alt="">`
+        ? `<img class="dm-msg-avatar" src="${senderAvatar(msg.name)}" alt="">`
         : side === 'in'
           ? `<span class="dm-msg-avatar spacer"></span>`
           : '';

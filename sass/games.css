@@ -1073,8 +1073,29 @@
 .g-waiting-sub {
   margin: 10px 0 0;
   text-align: center;
-  font-size: 14px;
   color: var(--g-muted);
+  font-size: 13px;
+}
+
+.g-wait-left,
+.g-skipped {
+  margin: 8px 0 0;
+  text-align: center;
+  color: var(--g-muted);
+  font-size: 13px;
+}
+
+.g-skip {
+  display: block;
+  margin: 12px auto 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #8e8e93;
+  font: inherit;
+  font-size: 13px;
+  text-decoration: underline;
+  cursor: pointer;
 }
 
 .g-dots {

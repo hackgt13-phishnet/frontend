@@ -179,12 +179,45 @@
     return readying;
   }
 
-  /** Every anonymous Supabase user is dealt a free demo profile at random; nobody picks. */
+  function slotProfileName() {
+    const cast = window.DMChat?.getActiveThread()?.cast;
+    if (!cast?.length) return null;
+    const idx = Math.max(0, (parseInt(api.playerSlot, 10) || 1) - 1);
+    return cast[idx] || null;
+  }
+
+  /** Every anonymous Supabase user is dealt a free demo profile at random; nobody picks.
+   *  A thread with a cast binds this browser slot to that person instead. */
   async function claimIdentity() {
     const userId = await api.userId();
-    if (ready.userId === userId && ready.profile) return true;
+    const wanted = slotProfileName();
+    if (ready.userId === userId && ready.profile && (!wanted || ready.profile.display_name === wanted)) {
+      return true;
+    }
     ready.userId = userId;
     if (!ready.profiles.length) ready.profiles = await api.profiles();
+
+    if (wanted) {
+      const saved = api.savedProfile();
+      if (saved && saved.userId === userId && saved.display_name === wanted) {
+        try {
+          await api.chooseProfile(saved.id);
+          ready.profile = saved;
+          return true;
+        } catch (err) {
+          if (err.status !== 409) throw err;
+          api.setSavedProfile(null);
+        }
+      }
+      await api.releaseProfile();
+      const profile = ready.profiles.find((p) => p.display_name === wanted);
+      if (!profile) throw new Error(`${wanted} is not available in this local game yet.`);
+      await api.chooseProfile(profile.id);
+      ready.profile = { ...profile, userId };
+      api.setSavedProfile(ready.profile);
+      toast(`You're playing as ${profile.display_name}`);
+      return true;
+    }
 
     const allowed = config.demoPlayers;
     const saved = api.savedProfile();
@@ -474,6 +507,8 @@
 
     room.viewer = snap.viewer_profile_id;
     room.meta = snap.room;
+    room.waitSeconds = snap.answer_wait_seconds || 0;
+    room.skipGrace = snap.skip_grace_seconds || 0;
     room.members = new Map(snap.members.map((m) => [m.profile_id, m]));
     room.sessions = new Map();
     for (const s of [snap.active_session, snap.last_session]) if (s) room.sessions.set(s.id, s);
@@ -595,6 +630,15 @@
     if (key === renderKey) return;
     renderKey = key;
     paintScreen(session, rounds);
+    const focus = rounds.find((r) => r.id === view.roundId) || rounds.find((r) => r.phase === 'answering');
+    const me = viewerId();
+    const ticking =
+      focus &&
+      focus.phase === 'answering' &&
+      (room.waitSeconds || room.skipGrace) &&
+      (answeredBy(focus, me) || !roundPlayers(focus).includes(me));
+    clearTimeout(room.waitTimer);
+    if (ticking) room.waitTimer = setTimeout(() => scheduleRender(true), 1000);
   }
 
   function pill(r) {
@@ -824,6 +868,29 @@
     });
   }
 
+  function viewerIsHost() {
+    return !!(room.meta && room.viewer && room.meta.host_profile_id === room.viewer);
+  }
+
+  function waitAgeSeconds(r) {
+    // Prefer the server clock (latest answer). A local start is only a stand-in until hydrate returns it.
+    if (r.waiting_since) {
+      const since = new Date(r.waiting_since).getTime();
+      if (!Number.isNaN(since)) return (Date.now() - since) / 1000;
+    }
+    if (!room.waitSince) room.waitSince = {};
+    if (!room.waitSince[r.id]) room.waitSince[r.id] = Date.now();
+    return (Date.now() - room.waitSince[r.id]) / 1000;
+  }
+
+  function skippedLine(r, results) {
+    const answered = new Set((results || []).map((res) => res.profile_id));
+    const missing = roundPlayers(r).filter((id) => !answered.has(id));
+    if (!missing.length) return '';
+    const label = missing.map((id) => displayName(id)).join(' and ');
+    return `<p class="g-skipped">${escapeHtml(label)} didn't answer</p>`;
+  }
+
   /* ----- waiting ----- */
 
   function paintWaiting(r, rounds) {
@@ -832,12 +899,25 @@
     const pending = players.filter((id) => !done.includes(id));
     const names = pending.map(displayName);
     const judging = !pending.length;
+    const age = waitAgeSeconds(r);
+    const countdown =
+      room.waitSeconds && age != null && age < room.waitSeconds
+        ? `<p class="g-wait-left">Continuing in ${Math.max(1, Math.ceil(room.waitSeconds - age))}s</p>`
+        : '';
+    const canSkip =
+      viewerIsHost() &&
+      pending.length &&
+      age != null &&
+      age >= (room.skipGrace || 0);
+    const skip = canSkip
+      ? `<button type="button" class="g-skip" data-act="skip" data-round="${escapeHtml(r.id)}">Continue without them</button>`
+      : '';
     const status = judging
       ? `<div class="g-waiting"><span class="g-dots"><i></i><i></i><i></i></span>The AI is judging the answers…</div>`
       : pending.length === 1
-        ? `<div class="g-waiting"><span class="g-dots"><i></i><i></i><i></i></span>Waiting for ${escapeHtml(names[0])} to answer...</div>`
+        ? `<div class="g-waiting"><span class="g-dots"><i></i><i></i><i></i></span>Waiting for ${escapeHtml(names[0])} to answer...</div>${countdown}${skip}`
         : `<div class="g-waiting"><span class="g-dots"><i></i><i></i><i></i></span>Round reveals when the last person answers.</div>
-           <p class="g-waiting-sub">Waiting for ${escapeHtml(names.join(', '))}...</p>`;
+           <p class="g-waiting-sub">Waiting for ${escapeHtml(names.join(' and '))}...</p>${countdown}${skip}`;
 
     const me = viewerId();
     const other = rounds.find((x) => x.id !== r.id && x.phase === 'answering' && roundPlayers(x).includes(me) && !answeredBy(x, me));
@@ -917,6 +997,7 @@
           <h3 class="g-reveal-title">It was ${correct === viewerId() ? 'you' : escapeHtml(profileName(correct))}!</h3>
           <p class="g-reveal-sub">${right}/${total} got it right</p>
           ${quote ? `<p class="g-quote-chip">“${escapeHtml(quote)}”</p>` : ''}
+          ${skippedLine(r, results)}
           ${
             next
               ? `<div class="g-divider"><span>Next up...</span></div>
@@ -986,7 +1067,8 @@
           ${promptHtml(r)}
           ${r.game_type === 'this_or_that' ? `<p class="g-hint">Here's what everyone said...</p>` : ''}
         </div>
-        <div class="g-groups">${groups}</div>`,
+        <div class="g-groups">${groups}</div>
+        ${skippedLine(r, results)}`,
       foot: nextFoot(r, rounds, session),
       key: `r:${r.id}`,
     });
@@ -1082,6 +1164,22 @@
     }
   }
 
+  async function skipWaiting(roundId) {
+    if (!roundId || submitting.has(roundId)) return;
+    submitting.add(roundId);
+    scheduleRender(true);
+    try {
+      const res = await api.skipWaiting(roundId);
+      if (res?.round) applyRow('rounds', res.round);
+      if (res?.session) applyRow('game_sessions', res.session);
+    } catch (err) {
+      toast(err.message);
+    } finally {
+      submitting.delete(roundId);
+      scheduleRender(true);
+    }
+  }
+
   async function playAgain() {
     if (playingAgain || !room.threadId) return;
     playingAgain = true;
@@ -1109,6 +1207,7 @@
     if (el.dataset.act === 'more') return toast('Chaos · AI-made rounds for your group');
     if (el.dataset.pick) return pick(view.roundId, el.dataset.pick);
     if (el.dataset.act === 'submit') return submit(el.dataset.round);
+    if (el.dataset.act === 'skip') return skipWaiting(el.dataset.round);
     if (el.dataset.act === 'again') return playAgain();
     if (el.dataset.act === 'next') {
       const r = rounds.find((x) => x.id === el.dataset.round);
@@ -1165,6 +1264,7 @@
   function exitPlayMode(refreshChat = true) {
     room.unsubscribe?.();
     clearTimeout(room.retryTimer);
+    clearTimeout(room.waitTimer);
     room = emptyRoom();
     renderKey = '';
     screenKey = '';

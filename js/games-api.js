@@ -6,15 +6,39 @@
   const playerSlot = new URLSearchParams(location.search).get('player') || '1';
   const storageKey = (name) => `${name}:${playerSlot}`;
 
+  function loopbackSupabase() {
+    try {
+      const host = new URL(cfg().supabaseUrl).hostname;
+      return host === '127.0.0.1' || host === 'localhost';
+    } catch {
+      return false;
+    }
+  }
+
+  /** UUID v4. Uses crypto.randomUUID when the browser has it, otherwise getRandomValues. */
+  function uuidV4() {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID();
+    }
+    const bytes = new Uint8Array(16);
+    crypto.getRandomValues(bytes);
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  }
+
   let client = null;
   function supabase() {
     if (client) return client;
     if (!global.supabase?.createClient) throw new Error('Supabase SDK failed to load');
+    // Separate storage so a hosted session is not sent to local Supabase.
+    const authName = loopbackSupabase() ? 'ig_games_auth_local' : 'ig_games_auth';
     client = global.supabase.createClient(cfg().supabaseUrl, cfg().supabaseAnonKey, {
       auth: {
         persistSession: true,
         autoRefreshToken: true,
-        storageKey: storageKey('ig_games_auth'),
+        storageKey: storageKey(authName),
       },
     });
     return client;
@@ -33,16 +57,49 @@
     return data.session;
   }
 
+  /** Same local GoTrue user for this ?player= slot, on every browser. Loopback only. */
+  function localSlotCreds() {
+    const slot = String(playerSlot).replace(/[^0-9]/g, '') || '1';
+    return {
+      email: `local-demo-player-${slot}@localhost.test`,
+      password: `local-demo-player-${slot}-loopback`,
+    };
+  }
+
+  async function ensureLocalUser() {
+    // Local Supabase has anonymous sign-in disabled. The slot account is stable so a
+    // fresh or incognito window signs into the same user that owns this cast member.
+    const creds = localSlotCreds();
+    let result = await supabase().auth.signInWithPassword(creds);
+    if (result.error) {
+      result = await supabase().auth.signUp(creds);
+    }
+    if (result.error) {
+      result = await supabase().auth.signInWithPassword(creds);
+    }
+    if (result.error) {
+      throw new Error(`Local Supabase sign-in failed: ${result.error.message}`);
+    }
+    if (!result.data.session) {
+      throw new Error('Local Supabase sign-in did not return a session');
+    }
+    return result.data.session;
+  }
+
   async function ensureAuth() {
     let current = await session();
-    if (!current) {
-      const { data, error } = await supabase().auth.signInAnonymously();
-      if (error) {
-        throw new Error(`Supabase sign-in failed: ${error.message}. Is anonymous sign-in enabled?`);
-      }
-      current = data.session;
+    if (loopbackSupabase()) {
+      const email = localSlotCreds().email;
+      if (current?.user?.email === email) return current;
+      if (current) await supabase().auth.signOut();
+      return ensureLocalUser();
     }
-    return current;
+    if (current) return current;
+    const { data, error } = await supabase().auth.signInAnonymously();
+    if (error) {
+      throw new Error(`Supabase sign-in failed: ${error.message}. Is anonymous sign-in enabled?`);
+    }
+    return data.session;
   }
 
   const NO_PROFILE = 'Choose a demo profile first';
@@ -186,7 +243,7 @@
       post(`/rooms/${roomId}/sessions`, { vibe: 'chaos', game_type: 'who_sent_this' }),
     submitResponse: (roundId, value, why) =>
       post(`/rounds/${roundId}/responses`, why ? { value, why } : { value }),
-    reveal: (roundId) => post(`/rounds/${roundId}/reveal`),
+    skipWaiting: (roundId) => post(`/rounds/${roundId}/skip`),
     advance: (roundId) => post(`/rounds/${roundId}/advance`),
     subscribeRoom,
     watchThreadGames,
