@@ -250,7 +250,20 @@
     return (window.DMChat?.getActiveThread()?.name || 'Group chat').slice(0, 80);
   }
 
+  // Who is in each chat: the names under its title (e.g. "Dev, Kofi, Ana").
+  function chatMembers(threadId) {
+    const t = window.DMChat?.getActiveThreadId() === threadId ? window.DMChat.getActiveThread() : null;
+    return (t?.status || '').split(',').map((n) => n.trim()).filter(Boolean);
+  }
+
   async function joinThread(threadId) {
+    // Only the chat's own members join its game room, so nobody from outside gets dealt in
+    // (and the chat's history stays eligible: rounds only quote a chat when all its members play).
+    const members = chatMembers(threadId);
+    const me = ready.profile?.display_name;
+    if (members.length && me && !members.includes(me)) {
+      throw new Error(`You're ${me}, who isn't in this chat. Open it as ${members.join(', ').replace(/, ([^,]*)$/, ' or $1')}.`);
+    }
     if (thread.id === threadId && thread.roomId) return thread.roomId;
     const seq = ++thread.seq;
     const roomRow = await api.threadRoom(threadId, threadName());
