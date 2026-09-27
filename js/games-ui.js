@@ -283,7 +283,7 @@
     const sender = invite.senderName || 'A friend';
     if (invite.done) return ['Game over · see the results', 'View'];
     if (invite.myTurn == null) return [invite.mine ? '3 rounds, made for your group' : `${sender} sent a game`, 'Play'];
-    if (invite.myTurn) return [invite.mine ? 'Your turn · tap to play' : `${sender} sent a game · your turn`, 'Play'];
+    if (invite.myTurn) return [invite.mine ? 'Ready to play' : `${sender} sent a game · tap to play`, 'Play'];
     return [`Waiting on ${invite.waitingCount} ${invite.waitingCount === 1 ? 'player' : 'players'}`, 'Open'];
   }
 
@@ -540,7 +540,11 @@
     const me = viewerId();
     return (
       rounds.find((r) => isRevealed(r) && !seenResults.has(r.id)) ||
-      rounds.find((r) => r.phase === 'answering' && roundPlayers(r).includes(me) && !answeredBy(r, me)) ||
+      rounds.find(
+        (r) =>
+          r.phase === 'answering' &&
+          (roundPlayers(r).includes(me) ? !answeredBy(r, me) : !seenResults.has(`sat:${r.id}`))
+      ) ||
       rounds.find((r) => r.phase === 'answering') ||
       null
     );
@@ -855,6 +859,9 @@
 
     const me = viewerId();
     const other = rounds.find((x) => x.id !== r.id && x.phase === 'answering' && roundPlayers(x).includes(me) && !answeredBy(x, me));
+    // The person whose post it is can't guess it, so they sit the round out and watch.
+    const sittingOut = !players.includes(me);
+    if (sittingOut) markSeen(`sat:${r.id}`);
 
     paint({
       subtitle: `Round ${r.ordinal} of ${rounds.length}`,
@@ -877,6 +884,13 @@
             )
             .join('')}</div>
         </div>
+        ${
+          !sittingOut
+            ? ''
+            : rounds.some((x) => roundPlayers(x).includes(me))
+              ? `<p class="g-sitout">This one is yours, so you sit it out. You'll see who guessed it when everyone's in.</p>`
+              : `<p class="g-sitout">This game started before you joined, so you're watching this one. You'll be in the next game.</p>`
+        }
         ${status}`,
       foot: other
         ? `<button type="button" class="g-cta ghost" data-go="${escapeHtml(other.id)}">Play Round ${other.ordinal} while you wait</button>`

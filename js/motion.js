@@ -121,21 +121,5 @@
     true
   );
 
-  // Invites in the chat: the ones waiting on you get a glow so they stand out from finished games.
-  function markInvites(scope) {
-    scope.querySelectorAll?.('.gp-invite').forEach((btn) => {
-      const text = btn.querySelector('.gp-invite-meta span')?.textContent || '';
-      btn.classList.toggle('m-turn', /your turn/i.test(text));
-    });
-  }
-  function watchChat() {
-    const chat = document.getElementById('chat-messages');
-    if (!chat) return;
-    markInvites(chat);
-    new MutationObserver(() => markInvites(chat)).observe(chat, { childList: true, subtree: true, characterData: true });
-  }
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', watchChat);
-  else watchChat();
-
   window.GameMotion = { painted };
 })();
