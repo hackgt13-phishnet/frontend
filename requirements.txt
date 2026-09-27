@@ -1,0 +1,4 @@
+# serve.py only (static UI + /v1 proxy to the Backend API)
+starlette>=0.40
+httpx>=0.28
+uvicorn>=0.32

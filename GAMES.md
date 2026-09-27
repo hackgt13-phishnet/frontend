@@ -40,20 +40,28 @@ exists for the team's other clients; the game master only runs live sessions.
 
 ## Multi-phone demo
 
+Clone both repos side by side and set up the backend first (its README: install, `.env`,
+and database setup if you use a new Supabase project):
+
 ```bash
+git clone https://github.com/hackgt13-phishnet/frontend.git
+git clone https://github.com/hackgt13-phishnet/Backend.git
+
 # 1. API (demo pace: ~25s answer timer, short discussion between rounds)
-cd /Users/prithul/Desktop/coding/Backend
+cd Backend
 GAME_PACE=demo .venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8001
 
-# 2. UI + /v1 proxy on one origin
-cd /Users/prithul/Desktop/coding/Instagram-UI-v2.0
-../Backend/.venv/bin/python serve.py
+# 2. UI + /v1 proxy on one origin (the Backend venv already has starlette/httpx/uvicorn;
+#    or pip install -r requirements.txt into any venv). API_URL / PORT override the defaults.
+cd ../frontend
+../Backend/.venv/bin/python serve.py          # http://localhost:8000
 
 # 3. Public HTTPS URL for phones (works on any network, including cellular)
+brew install cloudflared                      # once
 cloudflared tunnel --no-autoupdate --url http://localhost:8000
 
 # Before each demo: free all profiles, end running chat games, clear chat members
-cd /Users/prithul/Desktop/coding/Backend && .venv/bin/python scripts/reset_demo.py
+cd ../Backend && .venv/bin/python scripts/reset_demo.py
 ```
 
 Send every player `https://<tunnel>.trycloudflare.com/messages.html?thread=roshan-group`.

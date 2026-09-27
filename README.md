@@ -1,13 +1,22 @@
-# Instagram-UI-v2 + Ask your circle (Muse)
+# Instagram-UI-v2 + Games + Ask your circle (Muse)
 
-Instagram web clone extended with a Muse-powered **Ask your circle** feature for the Meta social-connection hackathon track (Ben Franklin effect).
+Instagram web clone extended with GamePigeon-style chat games and a Muse-powered **Ask your circle** feature for the Meta social-connection hackathon track.
 
-## Quick start
+## Games (main demo)
+
+Needs the API from [hackgt13-phishnet/Backend](https://github.com/hackgt13-phishnet/Backend).
+Full run-from-scratch steps, multi-phone setup and how the AI rounds work: [GAMES.md](./GAMES.md).
+
+```bash
+../Backend/.venv/bin/python serve.py   # UI + /v1 proxy → http://localhost:8000/messages.html
+```
+
+## Ask your circle (separate prototype)
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r server/requirements.txt
+pip install flask openai python-dotenv
 python server/app.py
 ```
 
